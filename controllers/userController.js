@@ -3,21 +3,27 @@ import asyncHandler from 'express-async-handler';
 import generateToken from '../utils/generateToken.js';
 import sendEmail from '../utils/sendEmail.js';
 import bcrypt from "bcryptjs"
-import { rateLimiter } from '../middlewares/Ratelimiter.js';
-import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
+import { OAuth2Client } from 'google-auth-library';
 
 // @desc    Register a new user
 // @route   POST /api/v1/users/register
 // @access  Public
 const registerUserCtrl = asyncHandler(async (req, res) => {
-    const { username, email, password } = req.body;
+    const { username, email, password, fullname } = req.body;
     const userExists = await User.findOne({ email });
     //Kiểm tra xem user đã tồn tại chưa
     if (userExists) {
         res.status(400);
-        throw new Error('User already exists');
+        throw new Error('Email already exists');
     }
+    const userExistsUsername = await User.findOne({ username });
+    //Kiểm tra xem user đã tồn tại chưa
+    if (userExists) {
+        res.status(400);
+        throw new Error('Username already exists');
+    }
+
     //Băm password
     const salt = await bcrypt.genSalt(10)
     const hashedPassword = await bcrypt.hash(password, salt)
@@ -25,6 +31,7 @@ const registerUserCtrl = asyncHandler(async (req, res) => {
     const userId = uuidv4();
     const user = await User.create({
         userId: userId,
+        fullname: fullname,
         username: username,
         email: email,
         password: hashedPassword
@@ -47,28 +54,48 @@ const registerUserCtrl = asyncHandler(async (req, res) => {
 // @route   POST /api/v1/users/login
 // @access  Public
 const loginUserCtrl = asyncHandler(async (req, res) => {
-    const { email, password } = req.body;
-    const user = await User.findOne({ email });
-    //Kiểm tra xem email và password có tồn tại không
-    if (!email || !password) {
-        const error = new Error("Please add email and password");
-        error.statusCode = 400;
-        throw error;
-    }
-    //Kiểm tra xem user có tồn tại không
-    if (user && (await bcrypt.compare(password, user.password))) {
-        res.json({
-            status: "success",
-            message: "Login successfully",
-            data: {
-                user,
-                token: generateToken(user._id)
+    const { isGoogle, isFaceBook, isGitHub } = req.body;
+
+    try {
+        if(isGoogle){
+            const { email, googleId, picture, fullname } = req.body;
+            const user = await User.findOne({ email, googleId });
+            if (!user) {
+                
+                const userAdd = await User.create({
+                    googleId: googleId,
+                    userId: uuidv4(),
+                    email: email,
+                    username: email,
+                    fullname: fullname,
+                    profile: {picture: picture},
+                    role: 'student'
+                });
+                res.json({
+                    status: "success",
+                    message: "Signup successfully",
+                    data: {
+                        user: userAdd,
+                        token: generateToken(userAdd._id)
+                    }
+                });
+            } else {
+                res.json({
+                    status: "success",
+                    message: "Login successfully",
+                    data: {
+                        user: user,
+                        token: generateToken(user._id)
+                    }
+                });
             }
-        });
-    } else {
-        res.status(401);
-        throw new Error('Invalid email or password');
+        }
     }
+    catch (error) {
+        res.status(401);
+        throw new Error('Login GG failed' + error);
+    }
+
 });
 
 // @desc    Get user profile
@@ -189,4 +216,49 @@ const deleteUserCtrl = asyncHandler(async (req, res) => {
     }
 });
 
-export { registerUserCtrl, loginUserCtrl, getUserProfileCtrl, updateUserCtrl, forgotPasswordCtrl, resetPasswordCtrl, deleteUserCtrl };
+
+const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
+const verify = async (token) => {
+    const ticket = await client.verifyIdToken({
+        idToken: token,
+        audience: process.env.GOOGLE_CLIENT_ID
+    });
+    return ticket.getPayload();
+}
+
+// @desc    Google login
+// @route   POST /api/v1/users/auth-google
+// @access  Public
+
+const googleLoginCtrl = asyncHandler(async (req, res) => {
+    const { token } = req.body;
+    if(token){
+        const payload = await verify(token);
+        const { email, name, picture, sub } = payload;
+        console.log(payload);
+        let user = await User.findOne({ email, googleId: sub });
+        if(user){
+            user = await User.create({
+                googleId: sub,
+                email: email,
+                fullname: name,
+                profile: {picture: picture},
+                role: 'student'
+            });
+        }
+        res.json({
+            status: "success",
+            message: "Login successfully",
+            data: {
+                user,
+                token: generateToken(user._id)
+            }
+        });
+    }else{
+        res.status(400);
+        throw new Error('Invalid token');
+    }
+});
+    
+
+export { registerUserCtrl, loginUserCtrl, getUserProfileCtrl, updateUserCtrl, forgotPasswordCtrl, resetPasswordCtrl, deleteUserCtrl, googleLoginCtrl };

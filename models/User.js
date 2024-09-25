@@ -8,6 +8,13 @@ const UserSchema = new Schema({
         required: true,
         unique: true
     },
+    googleId: {
+        type: String
+    },
+    fullname: {
+        type: String,
+        required: true
+    },
     username: {
         type: String,
         unique: true,
@@ -22,7 +29,9 @@ const UserSchema = new Schema({
     },
     password: {
         type: String,
-        required: true
+        required: function() {
+            return !this.googleId; // Nếu có googleId thì không yêu cầu password
+        }
     },
     role: {
         type: String,
