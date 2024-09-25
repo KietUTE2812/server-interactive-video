@@ -1,9 +1,10 @@
 import express from "express";
-import { forgotPasswordCtrl, getUserProfileCtrl, loginUserCtrl, registerUserCtrl, resetPasswordCtrl, updateUserCtrl, deleteUserCtrl } from "../controllers/userController.js";
+import { forgotPasswordCtrl, getUserProfileCtrl, loginUserCtrl, registerUserCtrl, resetPasswordCtrl, updateUserCtrl, deleteUserCtrl, googleLoginCtrl } from "../controllers/userController.js";
 import { isLoggedin } from "../middlewares/isLoggedin.js";
 
 const userRoutes = express.Router();
 
+userRoutes.post('/auth-google', googleLoginCtrl);
 userRoutes.post('/register', registerUserCtrl);
 userRoutes.post('/login', loginUserCtrl);
 userRoutes.get('/profile', getUserProfileCtrl);
