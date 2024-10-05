@@ -10,7 +10,7 @@ const sendEmail = async (options) => {
     });
 
     const mailOptions = {
-        from: { name: 'Reset password', address: process.env.GMAIL_USER },
+        from: { name: options.title ||'Reset PassWord', address: process.env.GMAIL_USER },
         to: options.email,
         subject: options.subject,
         text: options.message,
