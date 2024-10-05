@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 const Schema = mongoose.Schema;
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 const UserSchema = new Schema({
 
@@ -11,14 +13,22 @@ const UserSchema = new Schema({
     googleId: {
         type: String
     },
-    fullname: {
-        type: String,
-        required: true
+    facebookId: {
+        type: String
+    },
+    githubId: {
+        type: String
     },
     username: {
         type: String,
         unique: true,
         required: true
+    },
+    refreshToken: {
+        type: String
+    },
+    verifyCode: {
+        type: Number
     },
     email: {
         type: String,
@@ -30,8 +40,14 @@ const UserSchema = new Schema({
     password: {
         type: String,
         required: function() {
-            return !this.googleId; // Nếu có googleId thì không yêu cầu password
-        }
+            return !this.googleId && !this.facebookId
+        },
+    },
+    resetPasswordToken: {
+        type: String
+    },
+    resetPasswordExpire: {
+        type: Date
     },
     role: {
         type: String,
@@ -84,14 +100,30 @@ const UserSchema = new Schema({
     }],
     status: {
         type: String,
-        enum: ['active', 'removed'],
-        default: 'active'
+        enum: ['active', 'removed', 'pending'],
+        default: 'pending'
     }
 
 }, {
     timestamps: true
 }
 );
+
+UserSchema.pre('save', async function(next) {
+    if (this.isModified('password')) {
+        this.password = await bcrypt.hash(this.password, 12);
+    }
+    next();
+});
+UserSchema.methods.getResetPasswordToken = function() {
+    const resetToken = crypto.randomBytes(20).toString('hex');
+    this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
+    this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+    return resetToken;
+};
+UserSchema.methods.isAdmin = function() {
+    return this.role === 'admin';
+};
 
 //compile the schema into a model
 export default mongoose.model("User", UserSchema)
