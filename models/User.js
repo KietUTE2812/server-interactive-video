@@ -39,7 +39,7 @@ const UserSchema = new Schema({
     },
     password: {
         type: String,
-        required: function() {
+        required: function () {
             return !this.googleId && !this.facebookId
         },
     },
@@ -102,6 +102,18 @@ const UserSchema = new Schema({
         type: String,
         enum: ['active', 'removed', 'pending'],
         default: 'pending'
+    },
+    createAt: {
+        type: Date,
+        default: Date.now
+    },
+    updateAt: {
+        type: Date,
+        default: Date.now
+    },
+    lastLoginAt: {
+        type: Date,
+        default: Date.now
     }
 
 }, {
@@ -109,19 +121,19 @@ const UserSchema = new Schema({
 }
 );
 
-UserSchema.pre('save', async function(next) {
+UserSchema.pre('save', async function (next) {
     if (this.isModified('password')) {
         this.password = await bcrypt.hash(this.password, 12);
     }
     next();
 });
-UserSchema.methods.getResetPasswordToken = function() {
+UserSchema.methods.getResetPasswordToken = function () {
     const resetToken = crypto.randomBytes(20).toString('hex');
     this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
     this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
     return resetToken;
 };
-UserSchema.methods.isAdmin = function() {
+UserSchema.methods.isAdmin = function () {
     return this.role === 'admin';
 };
 
