@@ -27,8 +27,17 @@ const UserSchema = new Schema({
     refreshToken: {
         type: String
     },
-    verifyCode: {
+    verifyCode: { // mã xác thực email
         type: Number
+    },
+    verifyCodeExpired: {
+        type: Date
+    },
+    verifyForgotPassword: { // mã xác thực quên mật khẩu
+        type: Number
+    },
+    verifyForgotPasswordExpired: {
+        type: Date
     },
     email: {
         type: String,
@@ -42,12 +51,6 @@ const UserSchema = new Schema({
         required: function () {
             return !this.googleId && !this.facebookId
         },
-    },
-    resetPasswordToken: {
-        type: String
-    },
-    resetPasswordExpire: {
-        type: Date
     },
     role: {
         type: String,
@@ -127,11 +130,37 @@ UserSchema.pre('save', async function (next) {
     }
     next();
 });
+
 UserSchema.methods.getResetPasswordToken = function () {
     const resetToken = crypto.randomBytes(20).toString('hex');
     this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
     this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
     return resetToken;
+
+UserSchema.methods.getResetPassword = async function() {
+    const upperCase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    const lowerCase = 'abcdefghijklmnopqrstuvwxyz';
+    const numbers = '0123456789';
+    const specialChars = '!@#$%^&*()_+~`|}{[]:;?><,./-=';
+    const allChars = upperCase + lowerCase + numbers + specialChars;
+
+    // Bắt buộc mỗi loại ký tự có ít nhất 1
+    let password = '';
+    password += upperCase[Math.floor(Math.random() * upperCase.length)];
+    password += lowerCase[Math.floor(Math.random() * lowerCase.length)];
+    password += numbers[Math.floor(Math.random() * numbers.length)];
+    password += specialChars[Math.floor(Math.random() * specialChars.length)];
+
+    // Tạo các ký tự ngẫu nhiên cho các vị trí còn lại
+    for (let i = password.length; i < 16; i++) {
+        password += allChars[Math.floor(Math.random() * allChars.length)];
+    }
+
+    // Trộn đều các ký tự trong mật khẩu
+    const shuffledPassword = password.split('').sort(() => 0.5 - Math.random()).join('');
+    console.log(shuffledPassword.toString());
+    return shuffledPassword.toString();
+
 };
 UserSchema.methods.isAdmin = function () {
     return this.role === 'admin';

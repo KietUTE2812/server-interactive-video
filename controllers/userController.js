@@ -68,7 +68,9 @@ const registerUserCtrl = asyncHandler(async (req, res) => {
     });
     //Tạo verify code
     const code = Math.floor(100000 + Math.random() * 900000);
+    const expire = Date.now() + 10 * 60 * 1000;
     user.verifyCode = code;
+    user.verifyCodeExpired = expire;
     await user.save();
     //Tạo message
     const message = `Please enter the following code to verify your account: ${code}`;
@@ -78,7 +80,7 @@ const registerUserCtrl = asyncHandler(async (req, res) => {
             await sendEmail({
                 title: 'Verify account',
                 email: user.email,
-                subject: '[Code Chef] Verify your account',
+                subject: '[Code Chef] Verify your account. Valid for 10 minutes',
                 message
             });
         } catch (error) {
@@ -271,7 +273,6 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
         else{
             const { email, password } = req.body;
             const user = await User.findOne({ email });
-            console.log(email);
             //Kiểm tra xem user đã tồn tại chưa
             if (user && (await bcrypt.compare(password, user?.password))) {
                 //Tạo Refreshtoken
@@ -310,7 +311,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
 // @access  Private
 const getUserProfileCtrl = asyncHandler(async (req, res) => {
     const _id = req.params.userid;
-    const user = await User.findById({ _id }).select('-password -refreshToken -role');
+    const user = await User.findById({ _id }).select('-password -refreshToken');
     if (user) {
         res.json({
             status: "success",
@@ -329,8 +330,8 @@ const getUserProfileCtrl = asyncHandler(async (req, res) => {
 const updateUserCtrl = asyncHandler(async (req, res) => {
     const user = await User.findById(req.userId);
     if (user) {
-        user.name = req.body.name || user.name;
-        user.email = req.body.email || user.email;
+        const {fullname, bio, picture} = req.body;
+        user.profile.fullname = fullname || user.profile.fullname;
         if (req.body.password) {
             user.password = req.body.password;
         }
@@ -347,65 +348,76 @@ const updateUserCtrl = asyncHandler(async (req, res) => {
 }
 );
 
-// @desc    Forgot password
+// @desc    Forgot password (email)
 // @route   POST /api/v1/users/forgot-password
 // @access  Public
-const forgotPasswordCtrl = asyncHandler(async (req, res) => {
-    const user = await User.findOne({ email: req.body.email });
+export const forgotPasswordCtrl = asyncHandler(async (req, res) => {
+    const { email } = req.body;
+
+    // Check if the user exists
+    const user = await User.findOne({ email });
     if (!user) {
-        res.status(404);
-        throw new Error('User not found');
+        throw new Error("User not found with this email");
     }
-    //Get reset token
-    const resetToken = user.getResetPasswordToken();
-    await user.save();
-    //Create reset url
-    const resetUrl = `${req.protocol}://${req.get('host')}/api/v1/users/reset-password/${resetToken}`;
-    const message = `You are receiving this email because you 
-    (or someone else) has requested the reset of a password. Please make a PUT request to: \n\n ${resetUrl} \n\n This link will expire in 10 minutes`;
+
+    // Tạo token chứa 10 ký tự ngẫu nhiên
+    const resetToken = Math.floor(100000 + Math.random() * 900000);
+    const resetExpire = Date.now() + 10 * 60 * 1000;
+    user.verifyForgotPassword= resetToken;
+    user.verifyForgotPasswordExpired = resetExpire;
+    await user.save(); // Lưu token và thời gian hết hạn vào db
+
+    // Tạo nội dung email
+    const message = `Please enter the following code to reset your password: ${resetToken}`;
+
     try {
+        // Send the email
         await sendEmail({
-            title: 'Reset password',
             email: user.email,
-            subject: '[Code Chef] Password reset token',
+            subject: 'Your Password Reset Token (valid for 10 minutes)',
             message
         });
-        res.json({
-            status: "success",
-            message: "Email sent"
+
+        res.status(200).json({
+            status: 'success',
+            message: 'Token sent to email!'
         });
-    } catch (error) {
-        user.resetPasswordToken = undefined;
-        user.resetPasswordExpire = undefined;
-        await user.save();
-        res.status(500);
-        throw new Error('Email could not be sent');
+    } catch (err) {
+        throw new Error("There was an error sending the email. Try again later.");
     }
 });
 
-// @desc    Reset password
+// @desc    Reset password (token, new password)
 // @route   GET /api/v1/users/reset-password/:token
 // @access  Public
-const resetPasswordCtrl = asyncHandler(async (req, res) => {
-    const resetPasswordToken = req.params.token;
-    const resetToken = crypto.createHash('sha256').update(resetPasswordToken).digest('hex');
-    const user = await User.findOne({
-        resetPasswordToken: resetToken,
-        resetPasswordExpire: { $gt: Date.now() }
-    });
-    if (!user) {
-        res.status(400);
-        throw new Error('Invalid token');
+export const resetPasswordCtrl = asyncHandler(async (req, res) => {
+    const { code, password } = req.body;
+
+    try {
+        // Xác thực token
+        const user = await User.findOne({ verifyForgotPassword: code, verifyForgotPasswordExpired: { $gt: Date.now() } });
+
+        // Kiểm tra user
+        if (!user) {
+            throw new Error("User not found or token has expired");
+        }
+
+        // Set new password
+        user.password = password
+        user.verifyForgotPassword = '';
+        user.verifyForgotPasswordExpired = '';
+        await user.save();
+
+        // Send response
+        res.status(200).json({
+            status: 'success',
+            message: 'Password reset successful!',
+            token: token.generateToken(user._id),
+        });
+    } catch (err) {
+        // Handle invalid or expired token
+        throw new Error("Token is invalid or has expired" + err);
     }
-    //Set new password
-    user.password = req.body.password;
-    user.resetPasswordToken = undefined;
-    user.resetPasswordExpire = undefined;
-    await user.save();
-    res.json({
-        status: "success",
-        message: "Reset password successfully"
-    });
 });
 
 // @desc Delete user
@@ -445,7 +457,6 @@ const googleLoginCtrl = asyncHandler(async (req, res) => {
     if(token){
         const payload = await verify(token);
         const { email, name, picture, sub } = payload;
-        console.log(payload);
         let user = await User.findOne({ email, googleId: sub });
         if(user){
             user = await User.create({
@@ -505,6 +516,11 @@ const refreshAccessTokenCtrl = asyncHandler(async (req, res) => {
             err.statusCode = 403;
             throw err;
         }
+        res.cookie('refreshToken', refreshToken, {
+            httpOnly: true,
+            sameSite: 'None',
+            maxAge: 3 * 24 * 60 * 60 * 1000
+        });
         res.json({
             status: "success",
             message: "Refresh access token successfully",
