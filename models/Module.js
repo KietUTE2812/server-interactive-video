@@ -3,7 +3,12 @@ const Schema = mongoose.Schema;
 
 
 const ModuleItemSchema = new Schema({
-
+    moduleId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Module',
+        required: true,
+        unique: true
+    },
     title: {
         type: String,
         required: true,
@@ -53,10 +58,10 @@ const ModuleItemSchema = new Schema({
 const ModuleItem = mongoose.model('ModuleItem', ModuleItemSchema);
 
 const ModuleSchema = new Schema({
-    moduleId: {
-        type: String,
-        required: true,
-        unique: true
+    courseId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Course',
+        required: true
     },
     title: {
         type: String,
