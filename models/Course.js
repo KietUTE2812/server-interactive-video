@@ -61,6 +61,10 @@ CourseSchema = new Schema({
         min: [1, 'Rating must be at least 1'],
         max: [10, 'Rating must can not be more than 10']
     },
+    courseReviews: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CourseReview'
+    }],
     photo: {
         type: String,
         default: 'no-photo.jpg'
@@ -77,7 +81,7 @@ CourseSchema = new Schema({
 }, {
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
-});
+}, { timestamps: true });
 
 // Tạo index để tối ưu hóa truy vấn
 CourseSchema.index({ title: 'text', description: 'text' });

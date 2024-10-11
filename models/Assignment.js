@@ -2,6 +2,16 @@ import mongoose from "mongoose";
 const Schema = mongoose.Schema;
 
 const AssignmentSchema = new Schema({
+    courseId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Course',
+        required: true
+    },
+    userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
     status: {
         type: String,
         enum: ['passed', 'overdue', 'pending'],

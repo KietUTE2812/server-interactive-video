@@ -17,7 +17,10 @@ const CourseGradeSchema = new Schema({
         required: true
     },
 
-    assignments: [Assignment.schema],
+    assignments: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Assignment'
+    }],
     overallGrade: {
         type: Number,
         min: 0,
