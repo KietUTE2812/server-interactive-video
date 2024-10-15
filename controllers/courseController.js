@@ -1,6 +1,6 @@
-import Course from "../models/Course";
-import asyncHandler from "../middlewares/asyncHandler";
-import ErrorResponse from "../utils/ErrorResponse";
+import Course from "../models/Course.js";
+import asyncHandler from "../middlewares/asyncHandler.js";
+import ErrorResponse from "../utils/ErrorResponse.js";
 
 // @desc      Get all courses
 // @route     GET /api/v1/courses
@@ -47,9 +47,15 @@ export const getCourse = asyncHandler(async (req, res, next) => {
 // @route     POST /api/v1/courses
 // @access    Private
 export const createCourse = asyncHandler(async (req, res, next) => {
+    console.log('Request user:', req.user);
+    console.log('Request body:', req.body);
+    const instructorId = req.user ? req.user.id : req.body.instructor;
+    // if (!req.user) {
+    //     return next(new ErrorResponse('User not authenticated', 401));
+    // }
     // Add user to req.body
-    req.body.instructor = req.user.id;
-
+    //req.body.instructor = req.user.id;
+    req.body.instructor = instructorId;
     const course = await Course.create(req.body);
 
     res.status(201).json({
@@ -64,7 +70,7 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
     let course = await Course.findById(req.params.id);
 
     if (!course) {
-        return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
+        return next(new ErrorResponse(`Course not found with id of ${req.params.id} err `, 404));
     }
 
     // Make sure user is course owner

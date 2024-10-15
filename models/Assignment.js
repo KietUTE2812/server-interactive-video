@@ -64,7 +64,7 @@ AssignmentSchema.methods.getScore = async function () {
             return this.grade;
         }
     } else if (this.assignmentType === 'programming') {
-        await this.populate('programmingProblem');
+        await this.populate('programmingProblem', 'submissions');
         if (this.programmingProblem) {
             // For programming problems, we need to find the latest accepted submission
             const latestAcceptedSubmission = this.programmingProblem.submissions

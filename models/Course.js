@@ -1,14 +1,14 @@
 import mongoose from "mongoose";
-import Module from "./Module";
+import { Module } from "./Module.js";
 const Schema = mongoose.Schema;
 
-CourseSchema = new Schema({
-    courseId: {
-        type: String,
-        required: true,
-        unique: true,
-        maxlenghth: [10, 'Course ID can not be more tham 10 characters']
-    },
+const CourseSchema = new Schema({
+    // courseId: {
+    //     type: String,
+    //     required: true,
+    //     unique: true,
+    //     maxlenghth: [10, 'Course ID can not be more tham 10 characters']
+    // },
     title: {
         type: String,
         required: true,

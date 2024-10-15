@@ -12,17 +12,17 @@ import { protect, authorize } from "../middlewares/auth.js";
 const router = express.Router();
 
 // Course Grade routes
-router.route('/:courseId')
+router.route('/:id')
     .get(protect, getCourseGrade);
 
 router.route('/')
     .post(protect, updateCourseGrade);
 
 // Assignment routes
-router.route('/:courseId/assignments')
+router.route('/:id/assignments')
     .post(protect, createAssignment);
 
-router.route('/:courseId/assignments/:id')
+router.route('/:id/assignments/:id')
     .get(protect, getAssignment)
     .put(protect, updateAssignment)
     .delete(protect, authorize('admin', 'instructor'), deleteAssignment);
