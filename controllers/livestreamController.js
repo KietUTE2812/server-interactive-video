@@ -1,6 +1,6 @@
-import Livestream from '../models/Livestream';
-import asyncHandler from "../middlewares/asyncHandler";
-import ErrorResponse from "../utils/ErrorResponse";
+import Livestream from '../models/Livestream.js';
+import asyncHandler from "../middlewares/asyncHandler.js";
+import ErrorResponse from "../utils/ErrorResponse.js";
 
 // @desc      Get all livestreams
 // @route     GET /api/v1/livestreams

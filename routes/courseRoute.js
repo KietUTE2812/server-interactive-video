@@ -43,54 +43,57 @@ const router = express.Router();
 // Route cho danh sách khóa học
 router.route('/')
     .get(getCourses)
-    .post(protect, authorize('instructor', 'admin'), createCourse);
+    .post(protect, authorize('instructor', 'admin'), createCourse); //protect, authorize('instructor', 'admin'),
 
 // Route cho khóa học cụ thể
-router.route('/:courseId')
+router.route('/:id')
     .get(getCourse)
-    .put(protect, authorize('instructor', 'admin'), updateCourse)
-    .delete(protect, authorize('instructor', 'admin'), deleteCourse);
+    .put(protect, authorize('instructor', 'admin'), updateCourse) //protect, authorize('instructor', 'admin'),
+
+    .delete(protect, authorize('instructor', 'admin'), deleteCourse); // protect, authorize('instructor', 'admin'),
 
 // Route cho đánh giá khóa học
-router.route('/:courseId/reviews')
+router.route('/:id/reviews')
     .get(getReviews)
-    .post(protect, authorize('student'), addReview);
+    .post(protect, authorize('student'), addReview); // protect, authorize('student'),
 
-router.route('/:courseId/reviews/:reviewId')
-    .get(getReview)
-    .put(protect, authorize('student', 'admin'), updateReview)
-    .delete(protect, authorize('student', 'admin'), deleteReview);
+router.route('/:id/reviews/:reviewId')
+    //.get(getReview)
+    //.put(protect, authorize('student', 'admin'), updateReview) // protect, authorize('student', 'admin'),
+    .delete(protect, authorize('admin'), deleteReview); // protect, authorize('student', 'admin'),
 
 // Route cho phê duyệt khóa học của admin
-router.route('/:courseId/approve')
-    .put(protect, authorize('admin'), approveCourse);
+router.route('/:id/approve')
+    .put(protect, authorize('admin'), approveCourse); // protect, authorize('admin'),
 
 // Livestream routes
-router.route('/:courseId/livestreams')
+router.route('/:id/livestreams')
     .get(protect, getLivestreams)
-    .post(protect, authorize('admin', 'instructor'), createLivestream);
+    .post(protect, authorize('admin', 'instructor'), createLivestream); //protect, authorize('admin', 'instructor'),
 
-router.route('/:courseId/livestreams/:id')
+
+
+router.route('/:id/livestreams/:liveId')
     .get(protect, getLivestream)
     .put(protect, authorize('admin', 'instructor'), updateLivestream)
     .delete(protect, authorize('admin', 'instructor'), deleteLivestream);
 
 // Module routes
-router.route('/:courseId/modules')
+router.route('/:id/modules')
     .get(protect, getModules)
     .post(protect, authorize('admin', 'instructor'), createModule);
 
-router.route('/:courseId/modules/:moduleId')
+router.route('/:id/modules/:moduleId')
     .get(protect, getModule)
     .put(protect, authorize('admin', 'instructor'), updateModule)
     .delete(protect, authorize('admin', 'instructor'), deleteModule);
 
 // ModuleItem routes
-router.route('/:courseId/modules/:moduleId/lessons')
+router.route('/:id/modules/:moduleId/lessons')
     .get(protect, getModuleItems)
     .post(protect, authorize('admin', 'instructor'), createModuleItem);
 
-router.route('/:courseId/modules/:moduleId/lessons/:lessonId')
+router.route('/:id/modules/:moduleId/lessons/:lessonId')
     .get(protect, getModuleItem)
     .put(protect, authorize('admin', 'instructor'), updateModuleItem)
     .delete(protect, authorize('admin', 'instructor'), deleteModuleItem);

@@ -1,8 +1,7 @@
-import Assignment from "../models/Assignment"
-import CourseGrade from "../models/CourseGrade"
-import asyncHandler from "../middlewares/asyncHandler";
-import ErrorResponse from "../utils/ErrorResponse";
-import { async } from './../node_modules/mongodb/src/cmap/wire_protocol/compression';
+import Assignment from "../models/Assignment.js"
+import CourseGrade from "../models/CourseGrade.js"
+import asyncHandler from "../middlewares/asyncHandler.js";
+import ErrorResponse from "../utils/ErrorResponse.js";
 
 
 // // @desc      Get all course grades

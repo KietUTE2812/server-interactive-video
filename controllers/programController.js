@@ -1,7 +1,7 @@
 import axios from 'axios';
 import ProgramProblem from '../models/ProgramProblem.js';
-import asyncHandler from "../middlewares/asyncHandler";
-import ErrorResponse from "../utils/ErrorResponse";
+import asyncHandler from "../middlewares/asyncHandler.js";
+import ErrorResponse from "../utils/ErrorResponse.js";
 
 // @desc      Compile code
 // @route     POST /api/v1/program/compile

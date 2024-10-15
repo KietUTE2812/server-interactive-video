@@ -12,8 +12,6 @@ import authRoutes from '../routes/authRouteGithub.js';
 import userRoutes from "../routes/usersRoute.js";
 import courseGradeRoute from '../routes/courseGradeRoute.js';
 import courseRoute from '../routes/courseRoute.js';
-import livestreamRoute from '../routes/livestreamRoute.js';
-import moduleRoute from '../routes/moduleRoute.js';
 import programRoute from '../routes/programRoute.js';
 
 // Use environment variables for Redis connection

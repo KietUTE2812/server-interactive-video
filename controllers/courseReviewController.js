@@ -1,7 +1,7 @@
 import Course from '../models/Course.js';
 import Review from '../models/CourseReview.js';
-import asyncHandler from "../middlewares/asyncHandler";
-import ErrorResponse from "../utils/ErrorResponse";
+import asyncHandler from "../middlewares/asyncHandler.js";
+import ErrorResponse from "../utils/ErrorResponse.js";
 
 // @desc    Get all reviews
 // @route   GET /api/reviews
