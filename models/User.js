@@ -69,6 +69,10 @@ const UserSchema = new Schema({
         bio: {
             type: String,
             default: ''
+        },
+        phone: {
+            type: String,
+            default: ''
         }
     },
     enrolled_courses: [{
