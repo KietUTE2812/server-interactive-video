@@ -267,10 +267,10 @@ chokidar@^3.5.2:
   optionalDependencies:
     fsevents "~2.3.2"
 
-cloudinary@^2.5.0:
-  version "2.5.0"
-  resolved "https://registry.yarnpkg.com/cloudinary/-/cloudinary-2.5.0.tgz#f018416262b66fbcbc92ecb3136415fa484df50c"
-  integrity sha512-gPkyylFpyBAXiErAnMgZBlpwztHuZoik/OTLQM9oswjlzYHLMtQGoh0oisPBQvVHQxHmBUjcgwsAi393HDedqQ==
+cloudinary@^2.5.1:
+  version "2.5.1"
+  resolved "https://registry.yarnpkg.com/cloudinary/-/cloudinary-2.5.1.tgz#821a65bc889649222daa31ec60c2661f4d8f342e"
+  integrity sha512-CNg6uU53Hl4FEVynkTGpt5bQEAQWDHi3H+Sm62FzKf5uQHipSN2v7qVqS8GRVqeb0T1WNV+22+75DOJeRXYeSQ==
   dependencies:
     lodash "^4.17.21"
     q "^1.5.1"
@@ -1119,6 +1119,11 @@ msal-node@^0.0.1-security:
   version "0.0.1-security"
   resolved "https://registry.yarnpkg.com/msal-node/-/msal-node-0.0.1-security.tgz#0b832a36b8ecddb1bcff2ffa52a921ebdee878a0"
   integrity sha512-4saatJcQ0BZxtRp6fjO/wWyYYfYAAtByw1dNzUw4+iN37RMvWLoXb1xJPP7yuZSBohChhFPgiPnlio8ughERJA==
+
+multer-storage-cloudinary@^4.0.0:
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/multer-storage-cloudinary/-/multer-storage-cloudinary-4.0.0.tgz#afc9e73c353668c57dda5b73b7bb84bae6635f6f"
+  integrity sha512-25lm9R6o5dWrHLqLvygNX+kBOxprzpmZdnVKH4+r68WcfCt8XV6xfQaMuAg+kUE5Xmr8mJNA4gE0AcBj9FJyWA==
 
 multer@^1.4.5-lts.1:
   version "1.4.5-lts.1"

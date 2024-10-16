@@ -1,6 +1,7 @@
 import express from 'express'
 import dbConnect from "../config/dbConnect.js";
 import userRoutes from "../routes/usersRoute.js";
+import courseRoutes from '../routes/coursesRoute.js';
 import { globalErrHandler, notFound } from "../middlewares/globalErrHandler.js";
 import dotenv from 'dotenv';
 import Redis from 'ioredis';
@@ -33,7 +34,7 @@ app.use(cors({
 }));
 
 const verifyRecaptcha = async (token) => {
-    const secretKey = process.env.SITE_SECRET; // Thay bằng Secret Key của bạn
+    const secretKey = process.env.SITE_SECRET;
     const url = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`;
   
     try {
@@ -62,7 +63,8 @@ const verifyRecaptcha = async (token) => {
 
 // Load the userRoutes
 app.use('/api/v1/users' , userRoutes)
-app.use('/' , authRoutes)
+app.use('/api/v1/courses', courseRoutes)
+
 
 app.use(notFound)
 app.use(globalErrHandler)

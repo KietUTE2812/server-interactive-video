@@ -2,8 +2,10 @@ import axios from 'axios';
 import fs from 'fs';
 import path from 'path';
 import dotenv from 'dotenv';
+import multer from 'multer';
 
 dotenv.config();
+const uploadConfig = multer({ dest: 'uploads/' });
 
 // Hàm tải lên tệp
 async function uploadFile(filePath) {
@@ -35,9 +37,11 @@ async function uploadFile(filePath) {
         
         if (shareLinkResponse) {
             console.log(`Liên kết chia sẻ chỉ đọc: ${shareLinkResponse.webUrl}`);
+            return shareLinkResponse.webUrl;
         }
     } catch (error) {
         console.error('Lỗi khi tải lên:', error.response ? error.response.data : error.message);
+        throw error;
     }
 }
 
@@ -58,11 +62,12 @@ async function createShareLink(fileId, accessToken) {
         
         return response.data.link;
     } catch (error) {
-        console.error('Lỗi khi tạo liên kết chia sẻ:', error.response ? error.response.data : error.message);
+        throw error;
     }
 }
-
 // Đường dẫn đến tệp cần tải lên
 const fileToUpload = "C:/Users/huynh/Downloads/offers_details1.png"; // Thay đổi đường dẫn tệp
 
 uploadFile(fileToUpload);
+// export default { uploadFile, uploadConfig };
+

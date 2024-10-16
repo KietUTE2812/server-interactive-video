@@ -114,8 +114,6 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
             const { email, googleId, picture, fullname } = req.body;
             var user = await User.findOne({ email });
             if (!user) {
-                //Tạo Refreshtoken
-                const refreshToken = token.generateRefreshToken(user._id);
                 //Lưu refreshtoken vào db
                 const userAdd = await User.create({
                     googleId: googleId,
@@ -123,9 +121,13 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     email: email,
                     username: email,
                     profile: {picture: picture, fullname: fullname},
-                    refreshToken: refreshToken,
                     role: 'student'
                 });
+                //Tạo Refreshtoken
+                const refreshToken = token.generateRefreshToken(userAdd._id);
+                //Lưu refreshtoken vào db
+                userAdd.refreshToken = refreshToken;
+                await userAdd.save();
                 // Trả về token ở response và refreshtoken ở cookie
                 res.cookie('refreshToken', refreshToken, {
                     httpOnly: true,
@@ -161,7 +163,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     }
                 });
             }
-            //Kiểm tra xem user đã tồn tại nhưng chưa có facebookId
+            //Kiểm tra xem user đã tồn tại nhưng chưa có googleId
             else if(user && user.googleId !== googleId){
                 //Tạo Refreshtoken
                 const refreshToken = token.generateRefreshToken(user._id);
@@ -194,8 +196,6 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
             const { email, facebookId, picture, fullname } = req.body;
             var user = await User.findOne({ email });
             if (!user) {
-                //Tạo Refreshtoken
-                const refreshToken = token.generateRefreshToken(user._id);
                 //Lưu refreshtoken vào db
                 const userAdd = await User.create({
                     facebookId: facebookId,
@@ -203,9 +203,14 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     email: email,
                     username: email,
                     profile: {picture: picture, fullname: fullname},
-                    refreshToken: refreshToken,
                     role: 'student'
                 });
+                //Tạo Refreshtoken
+                const refreshToken = token.generateRefreshToken(userAdd._id);
+                //Lưu refreshtoken vào db
+                userAdd.refreshToken = refreshToken;
+                await userAdd.save();
+
                 // Trả về token ở response và refreshtoken ở cookie
                 res.cookie('refreshToken', refreshToken, {
                     httpOnly: true,
@@ -328,23 +333,29 @@ const getUserProfileCtrl = asyncHandler(async (req, res) => {
 // @route   PUT /api/v1/users/update-profile
 // @access  Private
 const updateUserCtrl = asyncHandler(async (req, res) => {
-    const user = await User.findById(req.userId);
-    if (user) {
-        const {fullname, bio, picture} = req.body;
-        user.profile.fullname = fullname || user.profile.fullname;
-        if (req.body.password) {
-            user.password = req.body.password;
-        }
-        const updatedUser = await user.save();
-        res.json({
-            status: "success",
-            message: "Update user profile successfully",
-            data: updatedUser
-        });
-    } else {
+    const userId = req.params.userid;
+    const filePath = req.file?.path;
+    const { fullname, bio, phone } = req.body;
+    // Kiểm tra xem user đã tồn tại chưa
+    const user = await User.findById(userId);
+    if (!user) {
         res.status(404);
         throw new Error('User not found');
     }
+    // Cập nhật thông tin user
+    user.profile.fullname = fullname || user.profile.fullname;
+    user.profile.bio = bio || user.profile.bio;
+    user.profile.phone = phone || user.profile.phone;
+    if (filePath) {
+        user.profile.picture = filePath;
+    }
+    await user.save();
+    res.json({
+        status: "success",
+        message: "Update user profile successfully",
+        data: user
+    });
+        
 }
 );
 

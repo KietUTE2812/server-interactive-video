@@ -1,8 +1,7 @@
 import mongoose from "mongoose";
-import Module from "./Module";
 const Schema = mongoose.Schema;
 
-CourseSchema = new Schema({
+const CourseSchema = new Schema({
     courseId: {
         type: String,
         required: true,
