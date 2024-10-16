@@ -1,5 +1,7 @@
 import express from 'express'
 import dbConnect from "../config/dbConnect.js";
+import userRoutes from "../routes/usersRoute.js";
+import courseRoutes from '../routes/coursesRoute.js';
 import { globalErrHandler, notFound } from "../middlewares/globalErrHandler.js";
 import dotenv from 'dotenv';
 import Redis from 'ioredis';
@@ -12,8 +14,6 @@ import authRoutes from '../routes/authRouteGithub.js';
 import userRoutes from "../routes/usersRoute.js";
 import courseGradeRoute from '../routes/courseGradeRoute.js';
 import courseRoute from '../routes/courseRoute.js';
-import livestreamRoute from '../routes/livestreamRoute.js';
-import moduleRoute from '../routes/moduleRoute.js';
 import programRoute from '../routes/programRoute.js';
 
 // Use environment variables for Redis connection
@@ -41,7 +41,7 @@ app.use(cors({
 }));
 
 const verifyRecaptcha = async (token) => {
-  const secretKey = process.env.SITE_SECRET; // Thay bằng Secret Key của bạn
+  const secretKey = process.env.SITE_SECRET;
   const url = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`;
 
   try {

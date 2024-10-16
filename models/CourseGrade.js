@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import Module from "./Module";
-import Assignment from "./Assignment";
+import { Module } from "./Module.js";
+import Assignment from "./Assignment.js";
 
 
 const Schema = mongoose.Schema;
