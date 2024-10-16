@@ -140,9 +140,9 @@ UserSchema.methods.getResetPasswordToken = function () {
     this.resetPasswordToken = crypto.createHash('sha256').update(resetToken).digest('hex');
     this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
     return resetToken;
-}
+};
 
-UserSchema.methods.getResetPassword = async function() {
+UserSchema.methods.getResetPassword = async function () {
     const upperCase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
     const lowerCase = 'abcdefghijklmnopqrstuvwxyz';
     const numbers = '0123456789';

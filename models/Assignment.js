@@ -2,6 +2,16 @@ import mongoose from "mongoose";
 const Schema = mongoose.Schema;
 
 const AssignmentSchema = new Schema({
+    courseId: {
+        type: Schema.Types.ObjectId,
+        ref: 'Course',
+        required: true
+    },
+    userId: {
+        type: Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
     status: {
         type: String,
         enum: ['passed', 'overdue', 'pending'],
@@ -54,7 +64,7 @@ AssignmentSchema.methods.getScore = async function () {
             return this.grade;
         }
     } else if (this.assignmentType === 'programming') {
-        await this.populate('programmingProblem');
+        await this.populate('programmingProblem', 'submissions');
         if (this.programmingProblem) {
             // For programming problems, we need to find the latest accepted submission
             const latestAcceptedSubmission = this.programmingProblem.submissions

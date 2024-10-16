@@ -4,8 +4,13 @@ const Schema = mongoose.Schema;
 // Schema cho submission (đã cập nhật)
 const SubmissionSchema = new Schema({
     userId: {
-        type: Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
+        required: true
+    },
+    problemId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ProgrammingProblem',
         required: true
     },
     status: {
@@ -37,8 +42,13 @@ const SubmissionSchema = new Schema({
     timestamps: true
 });
 
-// Schema cho testcase (không thay đổi)
+// Schema cho testcase
 const TestcaseSchema = new Schema({
+    problemId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ProgrammingProblem',
+        required: true
+    },
     input: {
         type: String,
         required: true
@@ -63,7 +73,7 @@ const TestcaseSchema = new Schema({
 });
 
 // Schema cho Programming Problem 
-const ProgrammingProblemSchema = new Schema({
+const ProgramProblemSchema = new Schema({
     problemId: {
         type: String,
         required: true,
@@ -123,7 +133,7 @@ const ProgrammingProblemSchema = new Schema({
         default: 0
     },
     createdBy: {
-        type: Schema.Types.ObjectId,
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
         required: true
     },
@@ -145,7 +155,7 @@ const ProgrammingProblemSchema = new Schema({
 });
 
 // Hàm tính điểm
-ProgrammingProblemSchema.methods.calculateScore = function (submission) {
+ProgramProblemSchema.methods.calculateScore = function (submission) {
     let score = this.baseScore;
 
     // Điều chỉnh điểm dựa trên độ khó
@@ -177,7 +187,7 @@ ProgrammingProblemSchema.methods.calculateScore = function (submission) {
 };
 
 // Middleware để cập nhật acceptedCount, totalSubmissions và tính điểm trước khi lưu
-ProgrammingProblemSchema.pre('save', function (next) {
+ProgramProblemSchema.pre('save', function (next) {
     if (this.isModified('submissions')) {
         this.totalSubmissions = this.submissions.length;
         this.acceptedCount = this.submissions.filter(sub => sub.status === 'Accepted').length;
@@ -191,4 +201,4 @@ ProgrammingProblemSchema.pre('save', function (next) {
     next();
 });
 
-export default mongoose.model('ProgrammingProblem', ProgrammingProblemSchema);
+export default mongoose.model('ProgramProblem', ProgramProblemSchema);

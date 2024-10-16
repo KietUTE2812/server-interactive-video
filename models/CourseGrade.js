@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
-import Module from "./Module";
-import Assignment from "./Assignment";
+import { Module } from "./Module.js";
+import Assignment from "./Assignment.js";
 
 
 const Schema = mongoose.Schema;
@@ -17,7 +17,10 @@ const CourseGradeSchema = new Schema({
         required: true
     },
 
-    assignments: [Assignment.schema],
+    assignments: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Assignment'
+    }],
     overallGrade: {
         type: Number,
         min: 0,

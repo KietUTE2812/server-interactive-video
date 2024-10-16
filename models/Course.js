@@ -1,13 +1,14 @@
 import mongoose from "mongoose";
+import { Module } from "./Module.js";
 const Schema = mongoose.Schema;
 
 const CourseSchema = new Schema({
-    courseId: {
-        type: String,
-        required: true,
-        unique: true,
-        maxlenghth: [10, 'Course ID can not be more tham 10 characters']
-    },
+    // courseId: {
+    //     type: String,
+    //     required: true,
+    //     unique: true,
+    //     maxlenghth: [10, 'Course ID can not be more tham 10 characters']
+    // },
     title: {
         type: String,
         required: true,
@@ -60,6 +61,10 @@ const CourseSchema = new Schema({
         min: [1, 'Rating must be at least 1'],
         max: [10, 'Rating must can not be more than 10']
     },
+    courseReviews: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CourseReview'
+    }],
     photo: {
         type: String,
         default: 'no-photo.jpg'
@@ -76,7 +81,7 @@ const CourseSchema = new Schema({
 }, {
     toJSON: { virtuals: true },
     toObject: { virtuals: true }
-});
+}, { timestamps: true });
 
 // Tạo index để tối ưu hóa truy vấn
 CourseSchema.index({ title: 'text', description: 'text' });

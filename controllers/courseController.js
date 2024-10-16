@@ -1,33 +1,51 @@
-import asyncHandler from 'express-async-handler';
-import Course from '../models/Course.js';
+import Course from "../models/Course.js";
+import asyncHandler from "../middlewares/asyncHandler.js";
+import ErrorResponse from "../utils/ErrorResponse.js";
 import User from '../models/User.js';
 
-// @desc    Create a new course
-// @route   POST /api/courses
-const createCourse = asyncHandler(async (req, res) => {
-    const { courseId, title, description, instructor, level, price, modules } = req.body;
-    const course = new Course({
-        courseId,
-        title,
-        description,
-        instructor,
-        level,
-        price,
-        modules,
-    });
-
-    const createdCourse = await course.save();
-    res.status(201).json(createdCourse);
+// @desc      Get all courses
+// @route     GET /api/v1/courses
+// @access    Public
+export const getCourses = asyncHandler(async (req, res, next) => {
+    const courses = await Course.find()
+        .populate({
+            path: 'instructor',
+            select: 'email profile.fullName'
+        })
+        .populate('modules')
+        .populate({
+            path: 'approvedBy',
+            select: 'email profile.fullName'
+        })
+        .populate('reviewCount');
+    res.status(200).json({ success: true, count: courses.length, data: courses });
 });
 
-// @desc    Get all courses
-// @route   GET /api/courses
-const getCourses = asyncHandler(async (req, res) => {
-    const courses = await Course.find({});
-    res.json(courses);
+// @desc      Get single course
+// @route     GET /api/v1/courses/:id
+// @access    Public
+export const getCourse = asyncHandler(async (req, res, next) => {
+    const course = await Course.findById(req.params.id)
+        .populate({
+            path: 'instructor',
+            select: 'email profile.fullName'
+        })
+        .populate('modules')
+        .populate({
+            path: 'approvedBy',
+            select: 'email profile.fullName'
+        })
+        .populate('reviewCount');
+
+    if (!course) {
+        return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
+    }
+
+    res.status(200).json({ success: true, data: course });
 });
+
 // @desc    Get course by ID
-// @route   GET /api/courses/:id body: {userId}
+// @route   GET /api/courses/:id query: {userId}
 const getCourseById = asyncHandler(async (req, res) => {
     const userId = req.query.userId;
     const user = await User.findById(userId);
@@ -60,73 +78,89 @@ const getCourseById = asyncHandler(async (req, res) => {
         });
     }
 });
-// @desc    Update course by ID
-// @route   PUT /api/courses/:id
-const updateCourse = asyncHandler(async (req, res) => {
-    const { courseId, title, description, instructor, level, price, modules } = req.body;
-    const course = await Course.findById(req.params.id);
-    if (course) {
-        course.courseId = courseId;
-        course.title = title;
-        course.description = description;
-        course.instructor = instructor;
-        course.level = level;
-        course.price = price;
-        course.modules = modules;
 
-        const updatedCourse = await course.save();
-        res.json(updatedCourse);
-    } else {
-        res.status(404);
-        throw new Error('Course not found');
-    }
-});
-// @desc    Delete course by ID (Update isDeleted field to true)
-// @route   DELETE /api/courses/:id
-const deleteCourse = asyncHandler(async (req, res) => {
-    const course = await Course.findById(req.params.id);
-    if (course) {
-        course.isDeleted = true;
-        const updatedCourse = await course.save();
-        res.json(updatedCourse);
-    } else {
-        res.status(404);
-        throw new Error('Course not found');
-    }
-});
+// @desc      Create new course
+// @route     POST /api/v1/courses
+// @access    Private
+export const createCourse = asyncHandler(async (req, res, next) => {
+    console.log('Request user:', req.user);
+    console.log('Request body:', req.body);
+    const instructorId = req.user ? req.user.id : req.body.instructor;
+    // if (!req.user) {
+    //     return next(new ErrorResponse('User not authenticated', 401));
+    // }
+    // Add user to req.body
+    //req.body.instructor = req.user.id;
+    req.body.instructor = instructorId;
+    const course = await Course.create(req.body);
 
-// @desc    Get courses by student ID
-// @route   GET /api/courses/student/:id
-const getCoursesByStudentId = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    const user = await User.findById(id);
-    if (user) {
-        const courses = await Course.find({ _id: { $in: user.enrolled_courses } });
-        if (!courses) {
-            res.status(404);
-            throw new Error('Courses not found');
-        }
-        res.json(courses);
-    } else {
-        res.status(404);
-        throw new Error('User not found');
+    res.status(201).json({
+        success: true,
+        data: course
+    });
+});
+// @desc      Update course
+// @route     PUT /api/v1/courses/:id
+// @access    Private
+export const updateCourse = asyncHandler(async (req, res, next) => {
+    let course = await Course.findById(req.params.id);
+
+    if (!course) {
+        return next(new ErrorResponse(`Course not found with id of ${req.params.id} err `, 404));
     }
+
+    // Make sure user is course owner
+    if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
+        return next(new ErrorResponse(`User ${req.user.id} is not authorized to update this course`, 401));
+    }
+
+    course = await Course.findByIdAndUpdate(req.params.id, req.body, {
+        new: true,
+        runValidators: true
+    });
+
+    res.status(200).json({ success: true, data: course });
 });
 
-// @desc    Get courses by instructor ID
-// @route   GET /api/courses/instructor/:id
-const getCoursesByInstructorId = asyncHandler(async (req, res) => {
-    const { id } = req.params;
-    if (!id) {
-        res.status(400);
-        throw new Error('Instructor ID is required');
-    }
-    const courses = await Course.find({ instructor: id });
-    if (!courses) {
-        res.status(404);
-        throw new Error('Courses not found');
-    }
-    res.json(courses);
-});
+// // @desc      Delete course
+// // @route     DELETE /api/v1/courses/:id
+// // @access    Private
+// export const deleteCourse = asyncHandler(async (req, res, next) => {
+//     const course = await Course.findById(req.params.id);
 
-export default { createCourse, getCourses, getCourseById, updateCourse, deleteCourse, getCoursesByStudentId, getCoursesByInstructorId };
+//     if (!course) {
+//         return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
+//     }
+
+//     // Make sure user is course owner
+//     if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
+//         return next(new ErrorResponse(`User ${req.user.id} is not authorized to delete this course`, 401));
+//     }
+
+//     await course.remove();
+
+//     res.status(200).json({ success: true, data: {} });
+// });
+
+// @desc      Approve course
+// @route     PUT /api/v1/courses/:id/approve
+// @access    Private
+export const approveCourse = asyncHandler(async (req, res, next) => {
+    let course = await Course.findById(req.params.id);
+    req.body.approvedBy = req.user.id;
+    if (!course) {
+        return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
+    }
+
+    // Make sure user is course owner
+    if (req.user.role !== 'admin') {
+        return next(new ErrorResponse(`User ${req.user.id} is not authorized to update this course`, 401));
+    }
+
+    course = await Course.findByIdAndUpdate(req.params.id, req.body, {
+        new: true,
+        runValidators: true
+    });
+
+    res.status(200).json({ success: true, data: course });
+});
