@@ -3,12 +3,12 @@ import { Module } from "./Module.js";
 const Schema = mongoose.Schema;
 
 const CourseSchema = new Schema({
-    // courseId: {
-    //     type: String,
-    //     required: true,
-    //     unique: true,
-    //     maxlenghth: [10, 'Course ID can not be more tham 10 characters']
-    // },
+    courseId: {
+        type: String,
+        required: true,
+        unique: true,
+        maxlenghth: [10, 'Course ID can not be more tham 10 characters']
+    },
     title: {
         type: String,
         required: true,
@@ -77,6 +77,11 @@ const CourseSchema = new Schema({
         type: String,
         trim: true
     }],
+    status: {
+        type: String,
+        enum: ['draft', 'published', 'unpublished'],
+        default: 'draft'
+    }
 
 }, {
     toJSON: { virtuals: true },

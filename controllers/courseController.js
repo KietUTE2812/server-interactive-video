@@ -44,9 +44,29 @@ export const getCourse = asyncHandler(async (req, res, next) => {
     res.status(200).json({ success: true, data: course });
 });
 
-// @desc    Get course by ID
+export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
+    const course = await Course.findOne({ courseId: req.params.id })
+        .populate({
+            path: 'instructor',
+            select: 'email profile.fullName'
+        })
+        .populate('modules')
+        .populate({
+            path: 'approvedBy',
+            select: 'email profile.fullName'
+        })
+        .populate('reviewCount');
+
+    if (!course) {
+        return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
+    }
+
+    res.status(200).json({ success: true, data: course });
+});
+
+// @desc    Get course by Instructor
 // @route   GET /api/courses/:id query: {userId}
-const getCourseById = asyncHandler(async (req, res) => {
+const getCourseByInstructor = asyncHandler(async (req, res) => {
     const userId = req.query.userId;
     const user = await User.findById(userId);
     if (!user) {
@@ -60,7 +80,7 @@ const getCourseById = asyncHandler(async (req, res) => {
     }
     const instructor = await User.findById(course.instructor).select('profile');
     if (course && user.enrolled_courses.includes(course._id)) {
-        
+
         res.json({
             isEnrolled: true,
             data: {
@@ -103,7 +123,7 @@ export const createCourse = asyncHandler(async (req, res, next) => {
 // @route     PUT /api/v1/courses/:id
 // @access    Private
 export const updateCourse = asyncHandler(async (req, res, next) => {
-    let course = await Course.findById(req.params.id);
+    let course = await Course.findOne({ courseId: req.params.id });
 
     if (!course) {
         return next(new ErrorResponse(`Course not found with id of ${req.params.id} err `, 404));
@@ -114,7 +134,7 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`User ${req.user.id} is not authorized to update this course`, 401));
     }
 
-    course = await Course.findByIdAndUpdate(req.params.id, req.body, {
+    course = await Course.findOneAndUpdate({ courseId: req.params.id }, req.body, {
         new: true,
         runValidators: true
     });
