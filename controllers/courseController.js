@@ -46,7 +46,7 @@ export const getCourse = asyncHandler(async (req, res, next) => {
 
 // @desc    Get course by ID
 // @route   GET /api/courses/:id query: {userId}
-const getCourseById = asyncHandler(async (req, res) => {
+export const getCourseById = asyncHandler(async (req, res) => {
     const userId = req.query.userId;
     const user = await User.findById(userId);
     if (!user) {

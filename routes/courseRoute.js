@@ -2,9 +2,9 @@ import express from "express";
 import {
     getCourses,
     createCourse,
-    getCourse,
+    getCourseById,
     updateCourse,
-    deleteCourse,
+    // deleteCourse,
     approveCourse
 } from "../controllers/courseController.js";
 
@@ -47,10 +47,10 @@ router.route('/')
 
 // Route cho khóa học cụ thể
 router.route('/:id')
-    .get(getCourse)
+    .get(getCourseById)
     .put(protect, authorize('instructor', 'admin'), updateCourse) //protect, authorize('instructor', 'admin'),
 
-    .delete(protect, authorize('instructor', 'admin'), deleteCourse); // protect, authorize('instructor', 'admin'),
+    // .delete(protect, authorize('instructor', 'admin'), deleteCourse); // protect, authorize('instructor', 'admin'),
 
 // Route cho đánh giá khóa học
 router.route('/:id/reviews')

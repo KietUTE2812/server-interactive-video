@@ -312,7 +312,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
 });
 
 // @desc    Get user profile
-// @route   GET /api/v1/users/profile
+// @route   GET /api/v1/users/:id
 // @access  Private
 const getUserProfileCtrl = asyncHandler(async (req, res) => {
     const _id = req.params.userid;
