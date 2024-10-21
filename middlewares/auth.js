@@ -13,6 +13,7 @@ export const protect = asyncHandler(async (req, res, next) => {
 
         token = req.cookies.token;
     }
+    //console.log("token api", token);
 
     if (!token) {
         return next(new ErrorResponse('Not authorized to access this route', 401));
@@ -20,9 +21,25 @@ export const protect = asyncHandler(async (req, res, next) => {
 
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.user = await User.findById(decoded.id);
+        //console.log('Decoded token:', decoded);
+
+        if (!decoded._id) {
+            return next(new ErrorResponse('Invalid token', 401));
+        }
+
+        const userId = typeof decoded._id === 'object' ? decoded._id.toString() : decoded._id;
+        //console.log('User ID from token:', userId);
+
+        req.user = await User.findById(userId);
+        //console.log('Found user:', req.user);
+
+        if (!req.user) {
+            return next(new ErrorResponse('User not found', 404));
+        }
+
         next();
     } catch (error) {
+        console.error('Error in protect middleware:', error);
         return next(new ErrorResponse('Not authorized to access this route', 401));
     }
 });

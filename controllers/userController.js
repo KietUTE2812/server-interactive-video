@@ -8,6 +8,50 @@ import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 
+
+// const checkAuthStatus = async (req, res) => {
+//     try {
+//         console.log('Received userId:', req.user);
+//         // The verifyToken middleware should have added the user's ID to the request object
+//         const user = req.user;
+
+//         if (!req.user) {
+//             return res.status(401).json({ message: 'Không tìm thấy thông tin người dùng' });
+//         }
+//         // If we've got this far, the token is valid and we've found the user
+//         res.status(200).json({
+//             status: 'success',
+//             data: {
+//                 user: {
+//                     id: _id,
+//                     email,
+//                     username,
+//                     role,
+//                     // Add any other user fields you want to send to the frontend
+//                 }
+//             }
+//         });
+//     } catch (error) {
+//         console.error('Error in check-auth-status:', error);
+//         res.status(500).json({ message: 'Internal server error' });
+//     }
+// };
+
+// const checkAuth = asyncHandler(async (req, res) => {
+//     const user = await User.findById(req.user._id).select('-username -email -role');
+//     if (user) {
+//         res.json({
+//             status: "success",
+//             message: "Get user profile successfully",
+//             data: user
+//         });
+//     } else {
+//         res.status(404);
+//         throw new Error('User not found');
+//     }
+// })
+
+
 const verifyAccountCtrl = asyncHandler(async (req, res) => {
     const { email, code } = req.body;
     const user = await User.findOne({ email });
@@ -36,7 +80,7 @@ const registerUserCtrl = asyncHandler(async (req, res) => {
     const { username, email, password, fullname } = req.body;
     const userExists = await User.findOne({ email });
     //Kiểm tra password
-    if(password.length < 8 || (/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[a-zA-Z\d!@#$%^&*(),.?":{}|<>]{8,}$/).test(password) === false) {
+    if (password.length < 8 || (/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[a-zA-Z\d!@#$%^&*(),.?":{}|<>]{8,}$/).test(password) === false) {
         res.status(400);
         throw new Error('Password is invalid');
     }
@@ -99,7 +143,7 @@ const registerUserCtrl = asyncHandler(async (req, res) => {
         throw new Error('Invalid user data');
     }
     //Create verify url
-    
+
 }
 );
 
@@ -110,7 +154,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
     const { isGoogle, isFacebook, isGitHub } = req.body;
 
     try {
-        if(isGoogle){
+        if (isGoogle) {
             const { email, googleId, picture, fullname } = req.body;
             var user = await User.findOne({ email });
             if (!user) {
@@ -120,7 +164,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     userId: uuidv4(),
                     email: email,
                     username: email,
-                    profile: {picture: picture, fullname: fullname},
+                    profile: { picture: picture, fullname: fullname },
                     role: 'student'
                 });
                 //Tạo Refreshtoken
@@ -143,7 +187,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     }
                 });
                 //Kiểm tra xem user đã tồn tại chưa
-            } else if(user && user.googleId === googleId){
+            } else if (user && user.googleId === googleId) {
                 //Tạo Refreshtoken
                 const refreshToken = token.generateRefreshToken(user._id);
                 //Lưu refreshtoken vào db
@@ -164,7 +208,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                 });
             }
             //Kiểm tra xem user đã tồn tại nhưng chưa có googleId
-            else if(user && user.googleId !== googleId){
+            else if (user && user.googleId !== googleId) {
                 //Tạo Refreshtoken
                 const refreshToken = token.generateRefreshToken(user._id);
                 //Lưu refreshtoken vào db
@@ -180,7 +224,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     sameSite: 'None',
                     maxAge: 3 * 24 * 60 * 60 * 1000
                 });
-                
+
                 res.json({
                     status: "success",
                     message: "Login successfully",
@@ -192,7 +236,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
             }
 
         }
-        else if(isFacebook){
+        else if (isFacebook) {
             const { email, facebookId, picture, fullname } = req.body;
             var user = await User.findOne({ email });
             if (!user) {
@@ -202,7 +246,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     userId: uuidv4(),
                     email: email,
                     username: email,
-                    profile: {picture: picture, fullname: fullname},
+                    profile: { picture: picture, fullname: fullname },
                     role: 'student'
                 });
                 //Tạo Refreshtoken
@@ -226,7 +270,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     }
                 });
                 //Kiểm tra xem user đã tồn tại chưa
-            } else if(user && user.facebookId === facebookId){
+            } else if (user && user.facebookId === facebookId) {
                 //Tạo Refreshtoken
                 const refreshToken = token.generateRefreshToken(user._id);
                 //Lưu refreshtoken vào db
@@ -247,7 +291,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                 });
             }
             //Kiểm tra xem user đã tồn tại nhưng chưa có facebookId
-            else if(user && user.facebookId !== facebookId){
+            else if (user && user.facebookId !== facebookId) {
                 //Tạo Refreshtoken
                 const refreshToken = token.generateRefreshToken(user._id);
                 //Lưu refreshtoken vào db
@@ -263,7 +307,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     sameSite: 'None',
                     maxAge: 3 * 24 * 60 * 60 * 1000
                 });
-                
+
                 res.json({
                     status: "success",
                     message: "Login successfully",
@@ -275,7 +319,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
             }
 
         }
-        else{
+        else {
             const { email, password } = req.body;
             const user = await User.findOne({ email });
             //Kiểm tra xem user đã tồn tại chưa
@@ -302,7 +346,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                 throw new Error('Invalid email or password');
             }
         }
-        
+
     }
     catch (error) {
         res.status(401);
@@ -316,7 +360,8 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
 // @access  Private
 const getUserProfileCtrl = asyncHandler(async (req, res) => {
     const _id = req.params.userid;
-    const user = await User.findById({ _id }).select('-password -refreshToken');
+
+    const user = await User.findById(_id).select('-password -refreshToken');
     if (user) {
         res.json({
             status: "success",
@@ -327,6 +372,8 @@ const getUserProfileCtrl = asyncHandler(async (req, res) => {
         res.status(404);
         throw new Error('User not found');
     }
+    console.log("get profile user");
+
 });
 
 // @desc    Update user profile
@@ -355,7 +402,7 @@ const updateUserCtrl = asyncHandler(async (req, res) => {
         message: "Update user profile successfully",
         data: user
     });
-        
+
 }
 );
 
@@ -374,7 +421,7 @@ export const forgotPasswordCtrl = asyncHandler(async (req, res) => {
     // Tạo token chứa 10 ký tự ngẫu nhiên
     const resetToken = Math.floor(100000 + Math.random() * 900000);
     const resetExpire = Date.now() + 10 * 60 * 1000;
-    user.verifyForgotPassword= resetToken;
+    user.verifyForgotPassword = resetToken;
     user.verifyForgotPasswordExpired = resetExpire;
     await user.save(); // Lưu token và thời gian hết hạn vào db
 
@@ -465,16 +512,16 @@ const verify = async (token) => {
 
 const googleLoginCtrl = asyncHandler(async (req, res) => {
     const { token } = req.body;
-    if(token){
+    if (token) {
         const payload = await verify(token);
         const { email, name, picture, sub } = payload;
         let user = await User.findOne({ email, googleId: sub });
-        if(user){
+        if (user) {
             user = await User.create({
                 googleId: sub,
                 email: email,
                 fullname: name,
-                profile: {picture: picture},
+                profile: { picture: picture },
                 role: 'student'
             });
         }
@@ -486,7 +533,7 @@ const googleLoginCtrl = asyncHandler(async (req, res) => {
                 token: generateToken(user._id)
             }
         });
-    }else{
+    } else {
         res.status(400);
         throw new Error('Invalid token');
     }
@@ -499,10 +546,10 @@ const googleLoginCtrl = asyncHandler(async (req, res) => {
 function getCookieValue(cookieString, name) {
     // Tách các cookie thành mảng
     const cookieArray = cookieString.split('; ');
-    
+
     // Tìm cookie có key là 'name'
     const cookie = cookieArray.find(cookie => cookie.startsWith(name + '='));
-    
+
     // Trả về giá trị của cookie nếu tìm thấy, ngược lại trả về null
     return cookie ? cookie.split('=')[1] : null;
 }
@@ -542,7 +589,7 @@ const refreshAccessTokenCtrl = asyncHandler(async (req, res) => {
         });
     }
     );
-});    
+});
 
 // @desc    Logout
 // @route   POST /api/v1/users/logout
@@ -563,7 +610,7 @@ const logoutCtrl = asyncHandler(async (req, res) => {
         throw err;
     }
     //Xóa refreshToken trong db
-    await User.findOneAndUpdate( {refreshToken} , { refreshToken: '' }, { new: true });
+    await User.findOneAndUpdate({ refreshToken }, { refreshToken: '' }, { new: true });
     //Xóa refreshToken trong cookie
     res.clearCookie('refreshToken');
     res.json({
@@ -572,6 +619,8 @@ const logoutCtrl = asyncHandler(async (req, res) => {
     });
 });
 
-export default { registerUserCtrl, loginUserCtrl, getUserProfileCtrl, updateUserCtrl, 
-    forgotPasswordCtrl, resetPasswordCtrl, deleteUserCtrl, googleLoginCtrl, 
-    refreshAccessTokenCtrl, logoutCtrl, verifyAccountCtrl };
+export default {
+    registerUserCtrl, loginUserCtrl, getUserProfileCtrl, updateUserCtrl,
+    forgotPasswordCtrl, resetPasswordCtrl, deleteUserCtrl, googleLoginCtrl,
+    refreshAccessTokenCtrl, logoutCtrl, verifyAccountCtrl
+};
