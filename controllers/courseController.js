@@ -112,6 +112,7 @@ export const createCourse = asyncHandler(async (req, res, next) => {
     // Add user to req.body
     //req.body.instructor = req.user.id;
     req.body.instructor = instructorId;
+
     const course = await Course.create(req.body);
 
     res.status(201).json({
@@ -130,14 +131,16 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
     }
 
     // Make sure user is course owner
-    if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
-        return next(new ErrorResponse(`User ${req.user.id} is not authorized to update this course`, 401));
-    }
+    // if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
+    //     return next(new ErrorResponse(`User ${req.user.id} is not authorized to update this course`, 401));
+    // }
 
     course = await Course.findOneAndUpdate({ courseId: req.params.id }, req.body, {
         new: true,
         runValidators: true
     });
+
+    console.log('Updated course:', req.body);
 
     res.status(200).json({ success: true, data: course });
 });

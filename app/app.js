@@ -65,6 +65,10 @@ app.post('/api/v1/users/verifyCaptcha', async (req, res) => {
     message: "Successfully"
   })
 });
+app.use((req, res, next) => {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+  next();
+});
 
 // Load the userRoutes
 app.use('/api/v1/users', userRoutes)
