@@ -1,6 +1,8 @@
 import Livestream from '../models/Livestream.js';
 import asyncHandler from "../middlewares/asyncHandler.js";
 import ErrorResponse from "../utils/ErrorResponse.js";
+import User from "../models/User.js";
+import Course from "../models/Course.js";
 
 // @desc      Get all livestreams
 // @route     GET /api/v1/livestreams
@@ -28,9 +30,27 @@ export const getLivestream = asyncHandler(async (req, res, next) => {
 // @access    Private
 export const createLivestream = asyncHandler(async (req, res, next) => {
     // Add user to req.body
-    req.body.instructor = req.user.id;
-
-    const livestream = await Livestream.create(req.body);
+    const { instructorId, courseId, title, description } = req.body;
+    console.log(req.body);
+    // Kiểm tra xem có tồn tại instructorId và courseId không
+    const instructor = await User.findById(instructorId);
+    if (!instructor) {
+        return next(new ErrorResponse(`Instructor not found with id of ${instructorId}`, 404));
+    }
+    const course = await Course.findById(courseId);
+    if (!course) {
+        return next(new ErrorResponse(`Course not found with id of ${courseId}`, 404));
+    }
+    if (course.instructor.toString() !== instructorId) {
+        return next(new ErrorResponse(`Instructor ${instructorId} is not authorized to create livestream for this course`, 401
+        ));
+    }
+    const livestream = await Livestream.create({
+        instructor: instructorId,
+        courseId,
+        title,
+        description: description ? description : ''
+});
 
     res.status(201).json({
         success: true,

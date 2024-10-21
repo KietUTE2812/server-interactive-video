@@ -21,16 +21,23 @@ const LivestreamSchema = new Schema({
         ref: 'User',
         required: true
     },
+    status: {
+        type: String,
+        enum: ['upcoming', 'live', 'finished'],
+        default: 'upcoming'
+    },
     startTime: {
         type: Date,
-        required: true
+        required: function () {
+            return this.status !== 'upcoming'
+        }
     },
     endTime: {
         type: Date
     },
     isLive: {
         type: Boolean,
-        default: true
+        default: false
     },
     youtubeLink: {
         type: String,

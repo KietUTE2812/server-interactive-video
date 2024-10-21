@@ -1,5 +1,7 @@
 import express from 'express'
 import dbConnect from "../config/dbConnect.js";
+import userRoutes from "../routes/usersRoute.js";
+import paymentsRoute from "../routes/paymentsRoute.js";
 import { globalErrHandler, notFound } from "../middlewares/globalErrHandler.js";
 import dotenv from 'dotenv';
 import Redis from 'ioredis';
@@ -9,10 +11,10 @@ import ErrorResponse from '../utils/ErrorResponse.js';
 
 //route
 import authRoutes from '../routes/authRouteGithub.js';
-import userRoutes from "../routes/usersRoute.js";
 import courseGradeRoute from '../routes/courseGradeRoute.js';
 import courseRoute from '../routes/courseRoute.js';
 import programRoute from '../routes/programRoute.js';
+import streamRoute from '../routes/streamRoute.js';
 
 // Use environment variables for Redis connection
 const redisHost = process.env.REDIS_HOST || 'localhost';
@@ -35,7 +37,6 @@ app.use(cors({
   origin: 'http://localhost:5173', // Hoặc dùng '*' nếu muốn cho phép mọi nguồn
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Các phương thức được phép
   credentials: true, // Nếu bạn cần gửi cookie hoặc authentication headers
-  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'Access-Control-Allow-Origin'], // Các header được phép
 }));
 
 const verifyRecaptcha = async (token) => {
@@ -76,6 +77,8 @@ app.use('/', authRoutes)
 app.use('/api/v1/coursegrades', courseGradeRoute);
 app.use('/api/v1/learns', courseRoute);
 app.use('/api/v1/problem', programRoute);
+app.use('/api/v1/payments', paymentsRoute);
+app.use('/api/v1/livestreams', streamRoute);
 
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {

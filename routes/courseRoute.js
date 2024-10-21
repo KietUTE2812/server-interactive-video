@@ -2,7 +2,7 @@ import express from "express";
 import {
     getCourses,
     createCourse,
-    getCourse,
+    getCourseById,
     updateCourse,
     approveCourse,
     getCourseByCourseId

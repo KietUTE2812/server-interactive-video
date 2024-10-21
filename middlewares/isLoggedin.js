@@ -4,7 +4,7 @@ import { verifyToken } from "../utils/verifyToken.js";
 export const isLoggedin = (req, res, next) => {
     //get token from header
     const token = getTokenFromHeader(req);
-    //verift the token
+    //verify the token
     const decodedUser = verifyToken(token);
     //save the user into req obj
     if (!decodedUser) {
