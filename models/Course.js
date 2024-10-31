@@ -28,7 +28,7 @@ const CourseSchema = new Schema({
     },
     level: {
         type: String,
-        required: true,
+        default: 'beginner',
         enum: ['beginner', 'intermediate', 'advanced']
     },
     price: {
@@ -67,7 +67,7 @@ const CourseSchema = new Schema({
     }],
     photo: {
         type: String,
-        default: 'no-photo.jpg'
+        default: 'https://res.cloudinary.com/dgbp29tck/image/upload/v1729536960/course_b1auye.jpg'
     },
     enrollmentCount: {
         type: Number,

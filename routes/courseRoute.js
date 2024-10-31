@@ -5,7 +5,8 @@ import {
     getCourseById,
     updateCourse,
     approveCourse,
-    getCourseByCourseId
+    getCourseByCourseId,
+    getCourseByInstructor
 } from "../controllers/courseController.js";
 
 import {
@@ -43,12 +44,12 @@ const router = express.Router();
 // Route cho danh sách khóa học
 router.route('/')
     .get(getCourses)
-    .post(createCourse); //protect, authorize('instructor', 'admin'),
-
+    .post(protect, authorize('instructor', 'admin'), createCourse); //protect, authorize('instructor', 'admin'),
+router.route('/getCourseByInstructor').get(protect, authorize('instructor', 'admin'), getCourseByInstructor);
 // Route cho khóa học cụ thể
 router.route('/:id')
     .get(getCourseByCourseId)
-    .put(updateCourse) //protect, authorize('instructor', 'admin'),
+    .put(protect, authorize('instructor', 'admin'), updateCourse) //protect, authorize('instructor', 'admin'),
 
 //.delete(protect, authorize('instructor', 'admin'), deleteCourse); // protect, authorize('instructor', 'admin'),
 

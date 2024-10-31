@@ -3,11 +3,6 @@ const Schema = mongoose.Schema;
 
 // Schema cho submission (đã cập nhật)
 const SubmissionSchema = new Schema({
-    userId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
     problemId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'ProgrammingProblem',

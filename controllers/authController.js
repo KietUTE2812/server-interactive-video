@@ -18,5 +18,5 @@ export const checkAuth = asyncHandler(async (req, res, next) => {
             user: user,
         }
     });
-    console.log('Found user:', req.user);
+    //console.log('Found user:', req.user);
 });
