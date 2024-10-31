@@ -29,8 +29,8 @@ const QuestionSchema = new Schema({
     type: {
         type: String,
         required: true,
-        enum: ['multiple-choice', 'true-false', 'short-answer'],
-        default: 'multiple-choice'
+        enum: ['multiple-choice', 'true-false', 'only-choice'],
+        default: 'only-choice'
     },
     points: {
         type: Number,

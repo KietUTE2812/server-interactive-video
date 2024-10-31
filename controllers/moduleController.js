@@ -1,4 +1,5 @@
 import { Module, ModuleItem } from '../models/Module.js';
+import Course from '../models/Course.js';
 import asyncHandler from '../middlewares/asyncHandler.js';
 import ErrorResponse from '../utils/ErrorResponse.js';
 
@@ -22,14 +23,69 @@ export const getModule = asyncHandler(async (req, res, next) => {
     res.status(200).json({ success: true, data: module });
 });
 
-//@desc Create new module
-//@route POST /api/v1/modules
-//@access Private
+/**
+ * @desc    Create new module for a course
+ * @route   POST /api/v1/learns/:courseId/modules
+ * @access  Private
+ */
 export const createModule = asyncHandler(async (req, res, next) => {
-    const module = await Module.create(req.body);
-    res.status(201).json({ success: true, data: module });
-});
+    const { id } = req.params;
 
+    // Debug
+    console.log('Course ID from params:', id);
+    console.log('Request body:', req.body);
+
+    // 1. Tìm course bằng courseId (string)
+    const course = await Course.findOne({ courseId: id });
+    if (!course) {
+        return next(new ErrorResponse(`Not found course with id ${id}`, 404));
+    }
+
+    // 2. Tạo object chứa dữ liệu module mới
+    const moduleData = {
+        ...req.body,
+        courseId: course._id  // Sử dụng _id của course thay vì courseId string
+    };
+
+    // 3. Tự động tạo index nếu không có
+    if (!moduleData.index) {
+        const moduleCount = await Module.countDocuments({ courseId: course._id });
+        moduleData.index = (moduleCount + 1).toString();
+    }
+
+    // 4. Validate title
+    if (!moduleData.title) {
+        return next(new ErrorResponse('Please enter title module', 400));
+    }
+
+    try {
+        // 5. Tạo module mới
+        const newModule = await Module.create(moduleData);
+
+        // 6. Cập nhật course với module mới
+        await Course.findByIdAndUpdate(
+            course._id,  // Sử dụng _id của course
+            {
+                $push: { modules: newModule._id }
+            },
+            { new: true }
+        );
+
+        // 7. Trả về response
+        res.status(201).json({
+            success: true,
+            data: newModule,
+            message: 'Create module successfully'
+        });
+    } catch (error) {
+        console.error('Error creating module:', error);
+
+        if (error.code === 11000) {
+            return next(new ErrorResponse('Duplicate index', 400));
+        }
+        return next(error);
+    }
+});
 //@desc Update module
 //@route PUT /api/v1/modules/:id
 //@access Private

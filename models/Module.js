@@ -14,6 +14,10 @@ const ModuleItemSchema = new Schema({
         required: true,
         unique: true
     },
+    description: {
+        type: String,
+
+    },
     type: {
         type: String,
         required: true,
@@ -48,10 +52,22 @@ const ModuleItemSchema = new Schema({
             type: String,
         }
     },
-    assignment: {
+    assignment:
+        [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Assignment'
+        }],
+    quiz:
+    {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Assignment'
+        ref: 'Quiz'
+    },
+    programming: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Programming'
     }
+
+
 
 });
 
@@ -63,15 +79,18 @@ const ModuleSchema = new Schema({
         ref: 'Course',
         required: true
     },
+    index: {
+        type: String,
+        required: true
+
+    },
     title: {
         type: String,
         required: true
     },
-    status: {
+    description: {
         type: String,
-        required: true,
-        enum: ['completed', 'not-completed'],
-        default: 'not-completed'
+
     },
     moduleItems: [{
         type: mongoose.Schema.Types.ObjectId,

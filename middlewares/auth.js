@@ -13,7 +13,7 @@ export const protect = asyncHandler(async (req, res, next) => {
 
         token = req.cookies.token;
     }
-    //console.log("token api", token);
+    console.log("token api", token);
 
     if (!token) {
         return next(new ErrorResponse('Not authorized to access this route', 401));
@@ -31,7 +31,7 @@ export const protect = asyncHandler(async (req, res, next) => {
         //console.log('User ID from token:', userId);
 
         req.user = await User.findById(userId);
-        //console.log('Found user:', req.user);
+        console.log('Found user:', req.user);
 
         if (!req.user) {
             return next(new ErrorResponse('User not found', 404));
