@@ -4,7 +4,7 @@ import { isLoggedin } from "../middlewares/isLoggedin.js";
 import { verifyToken } from "../utils/verifyToken.js";
 import upload from "../config/fileUpload.js";
 import { protect } from "../middlewares/auth.js";
-import { checkAuth } from "../controllers/authController.js";
+import { checkAuth, verifyPassword } from "../controllers/authController.js";
 
 const userRoutes = express.Router();
 
@@ -22,7 +22,6 @@ userRoutes.post('/verify-account', userCtrl.verifyAccountCtrl);
 userRoutes.get('/check-auth', protect, checkAuth);
 userRoutes.put('/:userid', isLoggedin, upload.single('avatar'), userCtrl.updateUserCtrl);//update user profile
 userRoutes.get('/:userid', isLoggedin, userCtrl.getUserProfileCtrl);
-
 // userRoutes.route('/check-auth-status')
 //     .get(protect, userCtrl.checkAuthStatus)
 export default userRoutes   
