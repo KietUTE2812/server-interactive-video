@@ -47,9 +47,19 @@ const ModuleItemSchema = new Schema({
     references: {
         title: {
             type: String,
+            default: ''
         },
-        link: {
+        size: {
+            type: Number,
+            default: 0,
+        },
+        fileName: {
             type: String,
+            default: ''
+        },
+        file: {
+            type: String,
+            default: ''
         }
     },
     assignment:
@@ -81,7 +91,14 @@ const ModuleSchema = new Schema({
     },
     index: {
         type: String,
-        required: true
+        required: true,
+        validate: {
+            validator: function (v) {
+
+                return !isNaN(parseInt(v));
+            },
+            message: props => `${props.value} is not a valid index number!`
+        }
 
     },
     title: {
@@ -97,7 +114,12 @@ const ModuleSchema = new Schema({
         ref: 'ModuleItem'
     }]
 });
-
+ModuleSchema.pre('save', function (next) {
+    if (this.index && typeof this.index === 'number') {
+        this.index = this.index.toString();
+    }
+    next();
+});
 const Module = mongoose.model('Module', ModuleSchema);
 
 export { Module, ModuleItem };
