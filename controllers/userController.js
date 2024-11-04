@@ -406,6 +406,43 @@ const updateUserCtrl = asyncHandler(async (req, res) => {
 }
 );
 
+// @desc    Update user profile
+// @route   PUT /api/v1/users/update-profile
+// @access  Private
+const updateUserByAdminCtrl = asyncHandler(async (req, res) => {
+    const adminId = req.params.userid;
+    const filePath = req.file?.path;
+    const { fullname, bio, phone, userId, status, role } = req.body;
+    // Kiểm tra xem user đã tồn tại chưa
+    const admin = await User.findById(adminId);
+    if (!admin) {
+        res.status(404);
+        throw new Error('You are not an admin');
+    }
+
+    const user = await User.findById(userId).select('profile userId status role fullname bio phone');
+    // Cập nhật thông tin user
+    user.profile.fullname = fullname || user.profile.fullname;
+    user.profile.bio = bio || user.profile.bio;
+    user.profile.phone = phone || user.profile.phone;
+    user.status = status || user.status
+    user.role = role || user.role
+    if (filePath) {
+        user.profile.picture = filePath;
+    }
+    console.log(user);
+    await user.save();
+    res.json({
+        status: "success",
+        message: "Update user profile successfully",
+        data: user
+    });
+
+}
+);
+
+
+
 // @desc    Forgot password (email)
 // @route   POST /api/v1/users/forgot-password
 // @access  Public
@@ -619,8 +656,19 @@ const logoutCtrl = asyncHandler(async (req, res) => {
     });
 });
 
+// @desc    Get all user
+// @route   GET /api/v1/users
+// @access  Private/Admin
+const getAllUserCtrl = asyncHandler(async (req, res) => {
+    const users = await User.find().select('-password -refreshToken');
+    res.json({
+        status: "success",
+        data: users
+    })
+});
+
 export default {
     registerUserCtrl, loginUserCtrl, getUserProfileCtrl, updateUserCtrl,
     forgotPasswordCtrl, resetPasswordCtrl, deleteUserCtrl, googleLoginCtrl,
-    refreshAccessTokenCtrl, logoutCtrl, verifyAccountCtrl
+    refreshAccessTokenCtrl, logoutCtrl, verifyAccountCtrl, getAllUserCtrl, updateUserByAdminCtrl
 };

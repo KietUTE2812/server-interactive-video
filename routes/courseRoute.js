@@ -47,7 +47,7 @@ router.route('/')
 
 // Route cho khóa học cụ thể
 router.route('/:id')
-    .get(getCourseByCourseId)
+    .get(getCourseById)
     .put(updateCourse) //protect, authorize('instructor', 'admin'),
 
 //.delete(protect, authorize('instructor', 'admin'), deleteCourse); // protect, authorize('instructor', 'admin'),

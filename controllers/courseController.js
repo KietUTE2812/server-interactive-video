@@ -7,6 +7,8 @@ import User from '../models/User.js';
 // @route     GET /api/v1/courses
 // @access    Public
 export const getCourses = asyncHandler(async (req, res, next) => {
+    let {limit , page = 1 } = req.query;
+    const count = await Course.countDocuments({status: 'published'});
     const courses = await Course.find()
         .populate({
             path: 'instructor',
@@ -17,8 +19,9 @@ export const getCourses = asyncHandler(async (req, res, next) => {
             path: 'approvedBy',
             select: 'email profile.fullName'
         })
-        .populate('reviewCount');
-    res.status(200).json({ success: true, count: courses.length, data: courses });
+        .populate('reviewCount').sort('createdAt').limit(page*limit > count ? count - (page-1)*limit : limit).skip((page - 1) * limit);
+    res.status(200).json({ success: true, page: parseInt(page),
+        limit: parseInt(limit), count, data: courses });
 });
 
 // @desc      Get single course
@@ -169,7 +172,7 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
 // @route     PUT /api/v1/courses/:id/approve
 // @access    Private
 export const approveCourse = asyncHandler(async (req, res, next) => {
-    let course = await Course.findById(req.params.id);
+    const course = await Course.findById(req.params.id);
     req.body.approvedBy = req.user.id;
     if (!course) {
         return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
@@ -180,10 +183,9 @@ export const approveCourse = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`User ${req.user.id} is not authorized to update this course`, 401));
     }
 
-    course = await Course.findByIdAndUpdate(req.params.id, req.body, {
-        new: true,
-        runValidators: true
-    });
+    course.isApproved = true;
+    course.approvedBy = req.user.id;
+    await course.save()
 
     res.status(200).json({ success: true, data: course });
 });

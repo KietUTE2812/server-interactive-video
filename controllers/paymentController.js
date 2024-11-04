@@ -22,9 +22,70 @@ const vnpay = new VNPay({
 // @route     GET /api/v1/payments
 // @access    Public
 const getPayments = asyncHandler(async (req, res, next) => {
+    const { fromMonth, toMonth, year } = req.query;
+
+    if(fromMonth > toMonth) {
+        return next(new ErrorResponse('From month must be less than to month', 400));
+    }
+
+    const startDate = new Date(year, fromMonth - 1, 1);
+
+    const endDate = new Date(year, toMonth, 0, 23, 59, 59, 999); 
+
     const payments = await Payment.find()
-        .populate('userId').populate('courseId');
-    res.status(200).json({ success: true, count: payments.length, data: payments });    
+        .where('createdAt')
+        .gte(startDate)
+        .lte(endDate);
+
+    const courses = await Promise.all(
+            payments.map(async (payment) => {
+                const course = await Course.findById(payment.courseId);
+                return course;
+            })
+        );
+        const totalSuccess = await Payment.aggregate([
+            {
+                $match: {
+                    paymentStatus: 'success'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
+        const totalPending = await Payment.aggregate([
+            {
+                $match: {
+                    paymentStatus: 'pending'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
+        const totalFailed = await Payment.aggregate([
+            {
+                $match: {
+                    paymentStatus: 'failed'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
+    res.status(200).json({ success: true, count: payments.length,total: {totalSuccess, totalPending, totalFailed}, data: {
+        payments: payments,
+        courses: courses
+    } });
 });
 
 // @desc      Get all payments by user id
@@ -36,11 +97,27 @@ const getPaymentsByUserId = asyncHandler(async (req, res, next) => {
     if (!user) {
         return next(new ErrorResponse(`User not found with id of ${userId}`, 404));
     }
+
+    
+
     const payments = await Payment.find({ userId: userId })
         .populate('userId').populate('courseId');
     res.status(200).json({ success: true, count: payments.length, data: payments });
 }
 );
+
+// @desc      Get payment by id
+// @route     GET /api/v1/payments/:id
+// @access    Public
+const getPaymentById = asyncHandler(async (req, res, next) => {
+    const payment = await Payment.findById(req.params.id).populate('userId', 'profile').populate('courseId', 'title');
+    if (!payment) {
+        return next(new ErrorResponse(`Payment not found with id of ${req.params.id}`, 404));
+    }
+    
+    res.status(200).json({ success: true, data: payment });
+});
+
 
 // @desc      Create new payment
 // @route     POST /api/v1/payments body {amount}
@@ -162,5 +239,5 @@ const vnpayReturn = asyncHandler(async (req, res, next) => {
     }
 }); 
 
-export default {getPayments, getPaymentsByUserId, createPayment, vnpayReturn, vnPayIPN};
+export default {getPayments, getPaymentsByUserId, getPaymentById, createPayment, vnpayReturn, vnPayIPN};
             

@@ -2,6 +2,7 @@ import express from 'express'
 import dbConnect from "../config/dbConnect.js";
 import userRoutes from "../routes/usersRoute.js";
 import paymentsRoute from "../routes/paymentsRoute.js";
+import conversationRoute from "../routes/conversationRoute.js";
 import { globalErrHandler, notFound } from "../middlewares/globalErrHandler.js";
 import dotenv from 'dotenv';
 import Redis from 'ioredis';
@@ -79,6 +80,7 @@ app.use('/api/v1/learns', courseRoute);
 app.use('/api/v1/problem', programRoute);
 app.use('/api/v1/payments', paymentsRoute);
 app.use('/api/v1/livestreams', streamRoute);
+app.use('/api/v1/conversations', conversationRoute);
 
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {
