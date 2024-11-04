@@ -16,6 +16,7 @@ import courseGradeRoute from '../routes/courseGradeRoute.js';
 import courseRoute from '../routes/courseRoute.js';
 import programRoute from '../routes/programRoute.js';
 import streamRoute from '../routes/streamRoute.js';
+import authRoute from '../routes/authRoute.js';
 
 // Use environment variables for Redis connection
 const redisHost = process.env.REDIS_HOST || 'localhost';
@@ -75,6 +76,7 @@ app.use((req, res, next) => {
 // Load the userRoutes
 app.use('/api/v1/users', userRoutes)
 app.use('/', authRoutes)
+app.use('/api/v1/auth', authRoute)
 app.use('/api/v1/coursegrades', courseGradeRoute);
 app.use('/api/v1/learns', courseRoute);
 app.use('/api/v1/problem', programRoute);

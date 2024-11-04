@@ -5,7 +5,8 @@ import {
     getCourseById,
     updateCourse,
     approveCourse,
-    getCourseByCourseId
+    getCourseByCourseId,
+    getCourseByInstructor
 } from "../controllers/courseController.js";
 
 import {
@@ -32,9 +33,9 @@ import {
     getModuleItems,
     deleteModule,
     updateModule,
-    getModule,
+    getModulesByCourseId,
     createModule,
-    getModules
+
 } from "../controllers/moduleController.js";
 
 import { protect, authorize } from "../middlewares/auth.js";
@@ -43,12 +44,12 @@ const router = express.Router();
 // Route cho danh sách khóa học
 router.route('/')
     .get(getCourses)
-    .post(createCourse); //protect, authorize('instructor', 'admin'),
-
+    .post(protect, authorize('instructor', 'admin'), createCourse); //protect, authorize('instructor', 'admin'),
+router.route('/getCourseByInstructor').get(protect, authorize('instructor', 'admin'), getCourseByInstructor);
 // Route cho khóa học cụ thể
 router.route('/:id')
-    .get(getCourseById)
-    .put(updateCourse) //protect, authorize('instructor', 'admin'),
+    .get(getCourseByCourseId)
+    .put(protect, authorize('instructor', 'admin'), updateCourse) //protect, authorize('instructor', 'admin'),
 
 //.delete(protect, authorize('instructor', 'admin'), deleteCourse); // protect, authorize('instructor', 'admin'),
 
@@ -80,11 +81,11 @@ router.route('/:id/livestreams/:liveId')
 
 // Module routes
 router.route('/:id/modules')
-    .get(protect, getModules)
+    .get(protect, getModulesByCourseId)
     .post(protect, authorize('admin', 'instructor'), createModule);
 
 router.route('/:id/modules/:moduleId')
-    .get(protect, getModule)
+    // .get(protect, getModule)
     .put(protect, authorize('admin', 'instructor'), updateModule)
     .delete(protect, authorize('admin', 'instructor'), deleteModule);
 

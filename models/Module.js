@@ -14,6 +14,10 @@ const ModuleItemSchema = new Schema({
         required: true,
         unique: true
     },
+    description: {
+        type: String,
+
+    },
     type: {
         type: String,
         required: true,
@@ -43,15 +47,37 @@ const ModuleItemSchema = new Schema({
     references: {
         title: {
             type: String,
+            default: ''
         },
-        link: {
+        size: {
+            type: Number,
+            default: 0,
+        },
+        fileName: {
             type: String,
+            default: ''
+        },
+        file: {
+            type: String,
+            default: ''
         }
     },
-    assignment: {
+    assignment:
+        [{
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'Assignment'
+        }],
+    quiz:
+    {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Assignment'
+        ref: 'Quiz'
+    },
+    programming: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Programming'
     }
+
+
 
 });
 
@@ -63,22 +89,37 @@ const ModuleSchema = new Schema({
         ref: 'Course',
         required: true
     },
+    index: {
+        type: String,
+        required: true,
+        validate: {
+            validator: function (v) {
+
+                return !isNaN(parseInt(v));
+            },
+            message: props => `${props.value} is not a valid index number!`
+        }
+
+    },
     title: {
         type: String,
         required: true
     },
-    status: {
+    description: {
         type: String,
-        required: true,
-        enum: ['completed', 'not-completed'],
-        default: 'not-completed'
+
     },
     moduleItems: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'ModuleItem'
     }]
 });
-
+ModuleSchema.pre('save', function (next) {
+    if (this.index && typeof this.index === 'number') {
+        this.index = this.index.toString();
+    }
+    next();
+});
 const Module = mongoose.model('Module', ModuleSchema);
 
 export { Module, ModuleItem };

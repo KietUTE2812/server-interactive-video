@@ -4,8 +4,9 @@ import { isLoggedin } from "../middlewares/isLoggedin.js";
 import { verifyToken } from "../utils/verifyToken.js";
 import upload from "../config/fileUpload.js";
 import { protect } from "../middlewares/auth.js";
-import { checkAuth } from "../controllers/authController.js";
+
 import isAdmin from "../middlewares/isAdmin.js"
+import { checkAuth, verifyPassword } from "../controllers/authController.js";
 
 const userRoutes = express.Router();
 
