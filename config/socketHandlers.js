@@ -43,6 +43,7 @@ export const handleSocketConnection = (io) => {
     }
     
     io.on('connection', (socket) => {
+        console.log(`User connected: ${socket.id}`);
         socket.on('user:login', handleUserLogin);// Lấy toàn bộ conversation của user, bao gồm lastMessage và unReadCount
         socket.on('conversation:join', handleConversationJoin);// Lấy toàn bộ tin nhắn của conversation, chuyển unreadCount = 0 và đọc tất cả tin nhắn
         socket.on('message:send', handleMessageSend);// Lưu message vào database, kiểm tra nếu đang join vào conver thì đã đọc, còn lại chưa đọc
@@ -51,13 +52,14 @@ export const handleSocketConnection = (io) => {
         socket.on('disconnect', handleUserDisconnect); // disconection
         
         async function handleUserLogin({ userId, username, picture }) {
-            const userExist = users.get(userId);
+            const userExist = userSockets.get(userId);
+            console.log('userExist:', userExist);
             if (userExist) {
                 userSockets.set(userId, socket.id);
                 socket.userId = userId;
                 return
             }
-            console.log(`User connected: ${socket.id}`);
+            
             const user = {
                 id: userId,
                 username,
@@ -215,29 +217,33 @@ export const handleSocketConnection = (io) => {
         }
         socket.on('video-call:join', ({ conversationId, userId }) => {
             socket.join(conversationId);
+            socket.userId = userId;
             console.log(`User ${userId} joined video call: ${conversationId}`);
             socket.to(conversationId).emit('video-call:user-joined', { userId });
         });
 
         socket.on('video-call:offer', ({ conversationId, offer }) => {
             console.log(`User ${socket.userId} sent offer to user`);
-            socket.to(conversationId).emit('video-call:offer', { offer });
-        });
+            socket.to(conversationId).emit('video-call:offer', { conversationId, offer });
+        }); 
 
         socket.on('video-call:answer', ({ conversationId, answer }) => {
-            socket.to(conversationId).emit('video-call:answer', { answer });
+            console.log(`User ${socket.userId} sent answer to user`);
+            socket.to(conversationId).emit('video-call:answer', { answer }); 
         });
 
-        socket.on('video-call:candidate', ({ conversationId, candidate }) => {
-            socket.to(conversationId).emit('video-call:candidate', { candidate });
-        });
-
+        socket.on('video-call:ice-candidate', ({ conversationId, candidate }) => {
+            socket.to(conversationId).emit('video-call:ice-candidate', { candidate }); 
+        }); 
+        socket.on('video-call:screen-share', ({ isScreenSharing, conversationId }) => {
+            socket.to(conversationId).emit('video-call:screen-share', { isScreenSharing });
+        })
         socket.on('video-call:leave', ({ conversationId, userId }) => {
             console.log(`User ${userId} left video call: ${conversationId}`);
             socket.to(conversationId).emit('video-call:user-left', { userId });
             socket.leave(conversationId);
         });
-        async function handleUserDisconnect() {
+        async function handleUserDisconnect() { 
             console.log('User disconnected:', socket.id);
             const userId = socket.userId;
             const user = users.get(userId);

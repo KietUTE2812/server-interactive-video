@@ -18,6 +18,7 @@ export const getModulesByCourseId = asyncHandler(async (req, res, next) => {
     if (!modules || modules.length === 0) {
         return next(new ErrorResponse(`No modules found for this course ${courseId}`, 404));
     }
+    console.log('Modules:', modules);
     res.status(200).json(modules);
 })
 

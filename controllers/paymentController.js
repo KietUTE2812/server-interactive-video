@@ -126,7 +126,7 @@ const createPayment = asyncHandler(async (req, res, next) => {
     const { amount, orderInfo, courseId, userId } = req.body;
     let ipAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     let date = new Date();
-    let createDate = dateFormat(date, 'yyyymmddHHmmss');
+    let createDate = dateFormat(date, 'yyyymmddmmHHss');
     let exDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
     let expireDate = dateFormat(exDate, 'yyyymmddHHmmss');
 
@@ -140,20 +140,21 @@ const createPayment = asyncHandler(async (req, res, next) => {
         vnp_Locale: 'vn',
         vnp_CreateDate: createDate, // tùy chọn, mặc định là hiện tại
         vnp_ExpireDate: expireDate, // tùy chọn
-    });
+    }); 
+    const course = await Course.findOne({courseId: courseId})
     // Kiểm tra payment có tồn tại không
-    const checkPayment = await Payment.findOne({ userId: userId, courseId: courseId});
+    const checkPayment = await Payment.findOne({ userId: userId, courseId: course._id});
     if (checkPayment) {
         return res.status(400).json({ success: false, message: 'Payment already exists' });
     }
     //Tạo payment
     const payment = await Payment.create({
         userId: userId,
-        courseId: courseId,
+        courseId: course?._id,
         paymentId: date.getTime(),
         amount: amount,
         currency: 'vnd',
-        orderId: date.getTime(),
+        orderId: createDate,
         orderInfo: orderInfo || 'Thanh toán học phí',
         paymentMethod: 'vnpay',
         paymentStatus: 'pending',
@@ -206,9 +207,9 @@ const vnPayIPN = asyncHandler(async (req, res, next) => {
 // @access    Public
 const vnpayReturn = asyncHandler(async (req, res, next) => {
     const verify = vnpay.verifyReturnUrl(req.query);
-    const payment = await Payment.findOne({ orderId: verify.orderId });
-
-    if (verify.isVerified) {
+    const payment = await Payment.findOne({ paymentId: verify.vnp_TxnRef });
+    console.log(payment);
+    if (verify.isVerified) {    
         if (!payment) {
             console.log('Payment not found');
             payment.paymentStatus = 'failed';
@@ -220,13 +221,14 @@ const vnpayReturn = asyncHandler(async (req, res, next) => {
         payment.save();
         // Đăng ký học phần cho user
         if (verify.isSuccess === true) {
-            const course = await Course.findById(payment.courseId);
+            const course = await Course.findById(payment.courseId)
             if (!course){
-                console.log('Course not found');
+                console.log('Course not found', payment.courseId);
                 return res.redirect(`${process.env.CLIENT_URL}/vnpay_return?status=failed`);
             }
             const user = await User.findById(payment.userId);
-            user.enrolled_courses.push(course._id);
+            
+            user.enrolled_courses.push(payment.courseId);
             user.save();
         }
         // Chuyển hướng đến frontend kèm theo các tham số giao dịch
