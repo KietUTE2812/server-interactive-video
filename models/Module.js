@@ -3,7 +3,7 @@ const Schema = mongoose.Schema;
 
 
 const ModuleItemSchema = new Schema({
-    moduleId: {
+    module: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Module',
         required: true,
