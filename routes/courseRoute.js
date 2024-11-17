@@ -26,19 +26,25 @@ import {
 } from "../controllers/livestreamController.js";
 
 import {
-    deleteModuleItem,
-    updateModuleItem,
-    getModuleItem,
-    createModuleItem,
-    getModuleItems,
     deleteModule,
     updateModule,
     getModulesByCourseId,
     createModule,
 
+
 } from "../controllers/moduleController.js";
 
+import {
+    createModuleItemQuiz,
+    createModuleItemSupplement,
+    createModuleItemLecture,
+    createModuleItemProgramming,
+    getModuleItemById,
+} from "../controllers/moduleItemController.js";
+
 import { protect, authorize } from "../middlewares/auth.js";
+import upload from "../middlewares/upload.js";
+
 const router = express.Router();
 
 // Route cho danh sách khóa học
@@ -91,12 +97,31 @@ router.route('/:id/modules/:moduleId')
 
 // ModuleItem routes
 router.route('/:id/modules/:moduleId/lessons')
-    .get(protect, getModuleItems)
-    .post(protect, authorize('admin', 'instructor'), createModuleItem);
+    .get(protect)
 
-router.route('/:id/modules/:moduleId/lessons/:lessonId')
-    .get(protect, getModuleItem)
-    .put(protect, authorize('admin', 'instructor'), updateModuleItem)
-    .delete(protect, authorize('admin', 'instructor'), deleteModuleItem);
+router.route('/:id/modules/:moduleId/quiz')
+    .get(protect)
+    .post(protect, authorize('admin', 'instructor'), createModuleItemQuiz);
 
+router.route('/:id/modules/:moduleId/supplement')
+    .post(
+        protect,
+        authorize('admin', 'instructor'),
+        upload.single('file'),
+        createModuleItemSupplement);
+
+router.route('/:id/modules/:moduleId/lecture')
+    .get(protect)
+    .post(protect,
+        authorize('admin', 'instructor'),
+        upload.single('file'),
+        createModuleItemLecture);
+
+router.route('/:id/modules/:moduleId/programming')
+    .get(protect)
+    .post(protect, authorize('admin', 'instructor'), createModuleItemProgramming);
+
+// get the module items for a module
+router.route('/moduleitem/:moduleItemId')
+    .get(protect, authorize('admin', 'instructor', 'student'), getModuleItemById);
 export default router;

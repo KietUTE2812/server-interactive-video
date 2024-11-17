@@ -1,22 +1,19 @@
 import mongoose from "mongoose";
 const Schema = mongoose.Schema;
 
-
 const ModuleItemSchema = new Schema({
-    moduleId: {
+    module: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Module',
         required: true,
-        unique: true
     },
     title: {
         type: String,
         required: true,
-        unique: true
+        unique: false,
     },
     description: {
         type: String,
-
     },
     type: {
         type: String,
@@ -32,56 +29,73 @@ const ModuleItemSchema = new Schema({
         type: String,
         required: true,
         enum: ['read', 'video', 'quiz', 'code'],
-
-    },
-    status: {
-        type: String,
-        required: true,
-        enum: ['completed', 'not-completed'],
-        default: 'not-completed'
     },
     isGrade: {
         type: Boolean,
         default: false,
     },
-    references: {
-        title: {
-            type: String,
-            default: ''
-        },
-        size: {
-            type: Number,
-            default: 0,
-        },
-        fileName: {
-            type: String,
-            default: ''
-        },
-        file: {
-            type: String,
-            default: ''
-        }
-    },
-    assignment:
-        [{
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Assignment'
-        }],
-    quiz:
-    {
+    video: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Quiz'
+        ref: 'Video',
+    },
+    reading: {
+        type: String,
+    },
+    quiz: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Quiz',
     },
     programming: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'Programming'
-    }
+        ref: 'ProgramProblem',
+    },
+    assignment: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Assignment',
+    }],
+}, { autoIndex: false }); // Disable auto indexing
 
 
-
+const VideoSchema = new Schema({
+    file: {
+        type: String,
+    },
+    duration: {
+        type: Number,
+    },
+    questions: [
+        {
+            index: {
+                type: Number
+            },
+            questionType: {
+                type: String,
+                enum: ['multipleChoice', 'trueFalse', 'onlyChoice'],
+                default: 'onlyChoice'
+            },
+            question: {
+                type: String
+            },
+            startTime: {
+                type: Number,
+                default: 30
+            },
+            answers: [{
+                content: {
+                    type: String,
+                    trim: true
+                },
+                isCorrect: {
+                    type: Boolean,
+                    default: false
+                }
+            }]
+        }
+    ]
+}, {
+    timestamps: true,
+    autoIndex: false // Disable auto indexing
 });
-
-const ModuleItem = mongoose.model('ModuleItem', ModuleItemSchema);
 
 const ModuleSchema = new Schema({
     courseId: {
@@ -92,14 +106,6 @@ const ModuleSchema = new Schema({
     index: {
         type: String,
         required: true,
-        validate: {
-            validator: function (v) {
-
-                return !isNaN(parseInt(v));
-            },
-            message: props => `${props.value} is not a valid index number!`
-        }
-
     },
     title: {
         type: String,
@@ -107,19 +113,16 @@ const ModuleSchema = new Schema({
     },
     description: {
         type: String,
-
     },
     moduleItems: [{
         type: mongoose.Schema.Types.ObjectId,
-        ref: 'ModuleItem'
+        ref: 'ModuleItem',
     }]
-});
-ModuleSchema.pre('save', function (next) {
-    if (this.index && typeof this.index === 'number') {
-        this.index = this.index.toString();
-    }
-    next();
-});
+}, { autoIndex: false }); // Disable auto indexing
+
+// Create models
+const ModuleItem = mongoose.model('ModuleItem', ModuleItemSchema);
+const Video = mongoose.model('Video', VideoSchema);
 const Module = mongoose.model('Module', ModuleSchema);
 
-export { Module, ModuleItem };
+export { Module, ModuleItem, Video };
