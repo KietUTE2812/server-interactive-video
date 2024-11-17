@@ -8,7 +8,8 @@ const QuizSchema = new Schema({
         ref: 'ModuleItem',
         unique: false,
 
-    },
+
+    
     totalQuestions: {
         type: Number,
         default: function () {

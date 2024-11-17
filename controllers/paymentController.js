@@ -22,9 +22,70 @@ const vnpay = new VNPay({
 // @route     GET /api/v1/payments
 // @access    Public
 const getPayments = asyncHandler(async (req, res, next) => {
+    const { fromMonth, toMonth, year } = req.query;
+
+    if(fromMonth > toMonth) {
+        return next(new ErrorResponse('From month must be less than to month', 400));
+    }
+
+    const startDate = new Date(year, fromMonth - 1, 1);
+
+    const endDate = new Date(year, toMonth, 0, 23, 59, 59, 999); 
+
     const payments = await Payment.find()
-        .populate('userId').populate('courseId');
-    res.status(200).json({ success: true, count: payments.length, data: payments });    
+        .where('createdAt')
+        .gte(startDate)
+        .lte(endDate);
+
+    const courses = await Promise.all(
+            payments.map(async (payment) => {
+                const course = await Course.findById(payment.courseId);
+                return course;
+            })
+        );
+        const totalSuccess = await Payment.aggregate([
+            {
+                $match: {
+                    paymentStatus: 'success'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
+        const totalPending = await Payment.aggregate([
+            {
+                $match: {
+                    paymentStatus: 'pending'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
+        const totalFailed = await Payment.aggregate([
+            {
+                $match: {
+                    paymentStatus: 'failed'
+                }
+            },
+            {
+                $group: {
+                    _id: null,
+                    total: { $sum: '$amount' }
+                }
+            }
+        ]);
+    res.status(200).json({ success: true, count: payments.length,total: {totalSuccess, totalPending, totalFailed}, data: {
+        payments: payments,
+        courses: courses
+    } });
 });
 
 // @desc      Get all payments by user id
@@ -36,11 +97,27 @@ const getPaymentsByUserId = asyncHandler(async (req, res, next) => {
     if (!user) {
         return next(new ErrorResponse(`User not found with id of ${userId}`, 404));
     }
+
+    
+
     const payments = await Payment.find({ userId: userId })
         .populate('userId').populate('courseId');
     res.status(200).json({ success: true, count: payments.length, data: payments });
 }
 );
+
+// @desc      Get payment by id
+// @route     GET /api/v1/payments/:id
+// @access    Public
+const getPaymentById = asyncHandler(async (req, res, next) => {
+    const payment = await Payment.findById(req.params.id).populate('userId', 'profile').populate('courseId', 'title');
+    if (!payment) {
+        return next(new ErrorResponse(`Payment not found with id of ${req.params.id}`, 404));
+    }
+    
+    res.status(200).json({ success: true, data: payment });
+});
+
 
 // @desc      Create new payment
 // @route     POST /api/v1/payments body {amount}
@@ -49,7 +126,7 @@ const createPayment = asyncHandler(async (req, res, next) => {
     const { amount, orderInfo, courseId, userId } = req.body;
     let ipAddr = req.headers['x-forwarded-for'] || req.connection.remoteAddress;
     let date = new Date();
-    let createDate = dateFormat(date, 'yyyymmddHHmmss');
+    let createDate = dateFormat(date, 'yyyymmddmmHHss');
     let exDate = new Date(date.getTime() + 24 * 60 * 60 * 1000);
     let expireDate = dateFormat(exDate, 'yyyymmddHHmmss');
 
@@ -63,20 +140,21 @@ const createPayment = asyncHandler(async (req, res, next) => {
         vnp_Locale: 'vn',
         vnp_CreateDate: createDate, // tùy chọn, mặc định là hiện tại
         vnp_ExpireDate: expireDate, // tùy chọn
-    });
+    }); 
+    const course = await Course.findOne({courseId: courseId})
     // Kiểm tra payment có tồn tại không
-    const checkPayment = await Payment.findOne({ userId: userId, courseId: courseId});
+    const checkPayment = await Payment.findOne({ userId: userId, courseId: course._id});
     if (checkPayment) {
         return res.status(400).json({ success: false, message: 'Payment already exists' });
     }
     //Tạo payment
     const payment = await Payment.create({
         userId: userId,
-        courseId: courseId,
+        courseId: course?._id,
         paymentId: date.getTime(),
         amount: amount,
         currency: 'vnd',
-        orderId: date.getTime(),
+        orderId: createDate,
         orderInfo: orderInfo || 'Thanh toán học phí',
         paymentMethod: 'vnpay',
         paymentStatus: 'pending',
@@ -129,9 +207,9 @@ const vnPayIPN = asyncHandler(async (req, res, next) => {
 // @access    Public
 const vnpayReturn = asyncHandler(async (req, res, next) => {
     const verify = vnpay.verifyReturnUrl(req.query);
-    const payment = await Payment.findOne({ orderId: verify.orderId });
-
-    if (verify.isVerified) {
+    const payment = await Payment.findOne({ paymentId: verify.vnp_TxnRef });
+    console.log(payment);
+    if (verify.isVerified) {    
         if (!payment) {
             console.log('Payment not found');
             payment.paymentStatus = 'failed';
@@ -143,13 +221,14 @@ const vnpayReturn = asyncHandler(async (req, res, next) => {
         payment.save();
         // Đăng ký học phần cho user
         if (verify.isSuccess === true) {
-            const course = await Course.findById(payment.courseId);
+            const course = await Course.findById(payment.courseId)
             if (!course){
-                console.log('Course not found');
+                console.log('Course not found', payment.courseId);
                 return res.redirect(`${process.env.CLIENT_URL}/vnpay_return?status=failed`);
             }
             const user = await User.findById(payment.userId);
-            user.enrolled_courses.push(course._id);
+            
+            user.enrolled_courses.push(payment.courseId);
             user.save();
         }
         // Chuyển hướng đến frontend kèm theo các tham số giao dịch
@@ -162,5 +241,5 @@ const vnpayReturn = asyncHandler(async (req, res, next) => {
     }
 }); 
 
-export default {getPayments, getPaymentsByUserId, createPayment, vnpayReturn, vnPayIPN};
+export default {getPayments, getPaymentsByUserId, getPaymentById, createPayment, vnpayReturn, vnPayIPN};
             

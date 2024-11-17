@@ -9,13 +9,13 @@ import {
     getCourseByInstructor
 } from "../controllers/courseController.js";
 
-import {
-    getReviews,
-    getReview,
-    addReview,
-    updateReview,
-    deleteReview
-} from "../controllers/courseReviewController.js";
+// import {
+//     getReviews,
+//     getReview,
+//     addReview,
+//     updateReview,
+//     deleteReview
+// } from "../controllers/courseReviewController.js";
 
 import {
     deleteLivestream,
@@ -31,6 +31,7 @@ import {
     getModulesByCourseId,
     createModule,
 
+    getModuleById
 
 } from "../controllers/moduleController.js";
 
@@ -43,7 +44,9 @@ import {
 } from "../controllers/moduleItemController.js";
 
 import { protect, authorize } from "../middlewares/auth.js";
+
 import upload from "../middlewares/upload.js";
+
 
 const router = express.Router();
 
@@ -59,15 +62,15 @@ router.route('/:id')
 
 //.delete(protect, authorize('instructor', 'admin'), deleteCourse); // protect, authorize('instructor', 'admin'),
 
-// Route cho đánh giá khóa học
-router.route('/:id/reviews')
-    .get(getReviews)
-    .post(protect, authorize('student'), addReview); // protect, authorize('student'),
-
-router.route('/:id/reviews/:reviewId')
-    //.get(getReview)
-    //.put(protect, authorize('student', 'admin'), updateReview) // protect, authorize('student', 'admin'),
-    .delete(protect, authorize('admin'), deleteReview); // protect, authorize('student', 'admin'),
+// // Route cho đánh giá khóa học
+// router.route('/:id/reviews')
+//     .get(getReviews)
+//     .post(protect, authorize('student'), addReview); // protect, authorize('student'),
+//
+// router.route('/:id/reviews/:reviewId')
+//     //.get(getReview)
+//     //.put(protect, authorize('student', 'admin'), updateReview) // protect, authorize('student', 'admin'),
+//     .delete(protect, authorize('admin'), deleteReview); // protect, authorize('student', 'admin'),
 
 // Route cho phê duyệt khóa học của admin
 router.route('/:id/approve')
@@ -97,6 +100,7 @@ router.route('/:id/modules/:moduleId')
 
 // ModuleItem routes
 router.route('/:id/modules/:moduleId/lessons')
+
     .get(protect)
 
 router.route('/:id/modules/:moduleId/quiz')
@@ -124,4 +128,13 @@ router.route('/:id/modules/:moduleId/programming')
 // get the module items for a module
 router.route('/moduleitem/:moduleItemId')
     .get(protect, authorize('admin', 'instructor', 'student'), getModuleItemById);
+
+    .post(protect, authorize('admin', 'instructor'), createModuleItem);
+
+router.route('/:id/modules/:moduleId/lessons/:lessonId')
+    .get(protect, getModuleItem)
+    .put(protect, authorize('admin', 'instructor'), updateModuleItem)
+    .delete(protect, authorize('admin', 'instructor'), deleteModuleItem);
+router.route('/modules/:id').get(isLoggedin,getModuleById);
+
 export default router;

@@ -8,6 +8,8 @@ import mongoose from "mongoose";
 // @route     GET /api/v1/courses
 // @access    Public
 export const getCourses = asyncHandler(async (req, res, next) => {
+    let { limit , page = 1 } = req.query;
+    const count = await Course.countDocuments({status: 'published'});
     const courses = await Course.find()
         .populate({
             path: 'instructor',
@@ -25,8 +27,11 @@ export const getCourses = asyncHandler(async (req, res, next) => {
             path: 'approvedBy',
             select: 'email profile.fullName'
         })
-        .populate('reviewCount');
-    res.status(200).json({ success: true, count: courses.length, data: courses });
+        .populate('reviewCount').sort('createdAt').limit(page*limit > count ? count - (page-1)*limit : limit).skip((page - 1) * limit);
+    
+    console.log('Courses:', courses);
+    res.status(200).json({ success: true, page: parseInt(page),
+        limit: parseInt(limit), count, data: courses });
 });
 
 // @desc      Get single course
@@ -60,10 +65,11 @@ export const getCourse = asyncHandler(async (req, res, next) => {
 });
 
 export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
+    
     const course = await Course.findOne({ courseId: { $regex: new RegExp(`^${req.params.id}$`, 'i') } })
         .populate({
             path: 'instructor',
-            select: 'email profile.fullName'
+            select: 'email profile'
         })
         .populate({
             path: 'modules',
@@ -75,43 +81,26 @@ export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
         })
         .populate({
             path: 'approvedBy',
-            select: 'email profile.fullName'
+            select: 'email profile'
         })
         .populate('reviewCount');
-
+    
     if (!course) {
         return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
     }
+    const userId = req.query?.userId;
+    var isEnrolled = false;
+    if (userId) {
+        const user = await User.findById(userId)
+        if (course && user.enrolled_courses.includes(course._id)) {
+            isEnrolled = true;
+        }
 
-    res.status(200).json({ success: true, data: course });
-});
-
-export const getCourseByInstructor = asyncHandler(async (req, res, next) => {
-    const courses = await Course.find({ instructor: req.user._id })
-        .populate({
-            path: 'instructor',
-            select: 'email profile.fullName'
-        })
-        .populate({
-            path: 'modules',
-            select: 'index title moduleItems description', // Lấy thêm moduleItems
-            populate: {
-                path: 'moduleItems', // Populate thêm thông tin của moduleItems
-                select: 'title content type' // Chọn các trường cần thiết của moduleItems
-            }
-        })
-        .populate({
-            path: 'approvedBy',
-            select: 'email profile.fullName'
-        })
-        .populate('reviewCount');
-
-    if (!courses) {
-        return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
     }
-    //console.log('Courses:', courses);
-    res.status(200).json({ success: true, data: courses, count: courses.length });
+
+    res.status(200).json({ success: true, data: course, isEnrolled });
 });
+
 // @desc    Get course by Instructor
 // @route   GET /api/courses/:id query: {userId}
 export const getCourseById = asyncHandler(async (req, res) => {
@@ -145,6 +134,32 @@ export const getCourseById = asyncHandler(async (req, res) => {
             }
         });
     }
+});
+export const getCourseByInstructor = asyncHandler(async (req, res, next) => {
+    const courses = await Course.find({ instructor: req.user._id })
+        .populate({
+            path: 'instructor',
+            select: 'email profile.fullName'
+        })
+        .populate({
+            path: 'modules',
+            select: 'index title moduleItems description', // Lấy thêm moduleItems
+            populate: {
+                path: 'moduleItems', // Populate thêm thông tin của moduleItems
+                select: 'title content type' // Chọn các trường cần thiết của moduleItems
+            }
+        })
+        .populate({
+            path: 'approvedBy',
+            select: 'email profile.fullName'
+        })
+        .populate('reviewCount');
+
+    if (!courses) {
+        return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
+    }
+    //console.log('Courses:', courses);
+    res.status(200).json({ success: true, data: courses, count: courses.length });
 });
 
 // @desc      Create new course
@@ -304,7 +319,7 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
 // @route     PUT /api/v1/courses/:id/approve
 // @access    Private
 export const approveCourse = asyncHandler(async (req, res, next) => {
-    let course = await Course.findById(req.params.id);
+    const course = await Course.findById(req.params.id);
     req.body.approvedBy = req.user.id;
     if (!course) {
         return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
@@ -315,10 +330,9 @@ export const approveCourse = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`User ${req.user.id} is not authorized to update this course`, 401));
     }
 
-    course = await Course.findByIdAndUpdate(req.params.id, req.body, {
-        new: true,
-        runValidators: true
-    });
+    course.isApproved = true;
+    course.approvedBy = req.user.id;
+    await course.save()
 
     res.status(200).json({ success: true, data: course });
 });

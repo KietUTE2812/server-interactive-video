@@ -2,6 +2,7 @@ import express from 'express'
 import dbConnect from "../config/dbConnect.js";
 import userRoutes from "../routes/usersRoute.js";
 import paymentsRoute from "../routes/paymentsRoute.js";
+import conversationRoute from "../routes/conversationRoute.js";
 import { globalErrHandler, notFound } from "../middlewares/globalErrHandler.js";
 import dotenv from 'dotenv';
 import Redis from 'ioredis';
@@ -16,6 +17,9 @@ import courseRoute from '../routes/courseRoute.js';
 import programRoute from '../routes/programRoute.js';
 import streamRoute from '../routes/streamRoute.js';
 import authRoute from '../routes/authRoute.js';
+import reviewRoute from "../routes/reviewRoute.js";
+import quizRoute from "../routes/quizRoute.js";
+import roadmapRoute from "../routes/roadmapRoute.js";
 
 // Use environment variables for Redis connection
 const redisHost = process.env.REDIS_HOST || 'localhost';
@@ -81,6 +85,10 @@ app.use('/api/v1/learns', courseRoute);
 app.use('/api/v1/problem', programRoute);
 app.use('/api/v1/payments', paymentsRoute);
 app.use('/api/v1/livestreams', streamRoute);
+app.use('/api/v1/conversations', conversationRoute);
+app.use('/api/v1/reviews', reviewRoute)
+app.use('/api/v1/quizzes', quizRoute)
+app.use('/api/v1/roadmap', roadmapRoute)
 
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {

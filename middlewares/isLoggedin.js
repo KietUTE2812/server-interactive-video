@@ -13,7 +13,7 @@ export const isLoggedin = (req, res, next) => {
         throw error;
     }
     else {
-        req.userAuthId = decodedUser?.id;
+        req.user = decodedUser;
         next();
     }
 

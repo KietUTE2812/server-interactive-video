@@ -3,12 +3,15 @@ import Course from '../models/Course.js';
 import asyncHandler from '../middlewares/asyncHandler.js';
 import ErrorResponse from '../utils/ErrorResponse.js';
 import mongoose from "mongoose";
+
 import Quiz from '../models/Quiz.js';
 import ProgramProblem from '../models/ProgramProblem.js';
 import { request } from 'express';
 import File from '../models/File.js';
 import dotevn from 'dotenv';
 import minioClient from '../config/minioClient.js';
+
+import Progress from "../models/Progress.js";
 
 //@desc get all modules by course ID
 //@route GET /api/v1/learns/courseID/modules/
@@ -34,11 +37,61 @@ export const getModulesByCourseId = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`No modules found for this course ${courseId}`, 404));
     }
 
-    //console.log('modules', modules);
-
+    console.log('Modules:', modules);
 
     res.status(200).json(modules);
 })
+
+//@desc get single module by course ID and module ID
+//@route GET /api/v1/learns/modules/:id
+//@access Public
+
+export const getModuleById = asyncHandler(async (req, res, next) => {
+    const moduleId = req.params.id;
+
+    // Lấy module và populate moduleItems
+    const module = await Module.findById(moduleId).populate('moduleItems');
+    if (!module) {
+        return next(new ErrorResponse(`Module not found with id of ${moduleId}`, 404));
+    }
+
+    // Tìm Progress của người dùng cho module
+    const userProgress = await Progress.findOne({
+        userId: req.user._id,
+        moduleId: moduleId
+    });
+
+    // Nếu không có progress, mặc định tất cả moduleItems chưa được hoàn thành
+    const moduleItemsWithProgress = module.moduleItems.map(item => {
+        // Tìm trạng thái hoàn thành của từng moduleItem trong Progress (nếu có)
+        const itemProgress = userProgress?.moduleItemProgresses.find(
+            progress => progress.moduleItemId.toString() === item._id.toString()
+        );
+
+        return {
+            ...item.toObject(),
+            status: itemProgress?.status || 'not-started',
+            attempts: itemProgress?.attempts || 0,
+            timeSpent: itemProgress?.timeSpent || 0,
+            completedAt: itemProgress?.completedAt || null
+        };
+    });
+
+    // Tính phần trăm hoàn thành của module
+    const completionPercentage =  userProgress.completionPercentage
+
+    res.status(200).json({
+        success: true,
+        data: {
+            module: {
+                ...module.toObject(),
+                moduleItems: moduleItemsWithProgress,
+                completionPercentage
+            },
+        }
+    });
+});
+
 
 /**
  * @desc    Create new module for a course
