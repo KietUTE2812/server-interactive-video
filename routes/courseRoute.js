@@ -129,12 +129,10 @@ router.route('/:id/modules/:moduleId/programming')
 router.route('/moduleitem/:moduleItemId')
     .get(protect, authorize('admin', 'instructor', 'student'), getModuleItemById);
 
-    .post(protect, authorize('admin', 'instructor'), createModuleItem);
 
-router.route('/:id/modules/:moduleId/lessons/:lessonId')
-    .get(protect, getModuleItem)
-    .put(protect, authorize('admin', 'instructor'), updateModuleItem)
-    .delete(protect, authorize('admin', 'instructor'), deleteModuleItem);
-router.route('/modules/:id').get(isLoggedin,getModuleById);
+// router.route('/:id/modules/:moduleId/lessons/:lessonId')
+//     .get(protect, getModuleItem)
+
+// router.route('/modules/:id').get(isLoggedin, getModuleById);
 
 export default router;
