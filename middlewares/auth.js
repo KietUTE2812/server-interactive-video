@@ -13,7 +13,7 @@ export const protect = asyncHandler(async (req, res, next) => {
 
         token = req.cookies.token;
     }
-    //console.log("token api", token);
+    // console.log("token api", token);
 
     if (!token) {
         return next(new ErrorResponse('Not authorized to access this route', 401));

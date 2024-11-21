@@ -3,6 +3,14 @@ import Course from '../models/Course.js';
 import asyncHandler from '../middlewares/asyncHandler.js';
 import ErrorResponse from '../utils/ErrorResponse.js';
 import mongoose from "mongoose";
+
+import Quiz from '../models/Quiz.js';
+import ProgramProblem from '../models/ProgramProblem.js';
+import { request } from 'express';
+import File from '../models/File.js';
+import dotevn from 'dotenv';
+import minioClient from '../config/minioClient.js';
+
 import Progress from "../models/Progress.js";
 
 //@desc get all modules by course ID
@@ -15,11 +23,22 @@ export const getModulesByCourseId = asyncHandler(async (req, res, next) => {
     if (!course) {
         return next(new ErrorResponse(`No found course with id ${courseId}`, 404));
     }
-    const modules = await Module.find({ courseId: course._id }).populate('moduleItems');
+    const modules = await Module.find({ courseId: course._id })
+        .populate({
+            path: 'moduleItems', // Populates the moduleItems field
+            populate: [
+                { path: 'video', model: 'Video' },      // Populate related video document in moduleItems
+                { path: 'quiz', model: 'Quiz' },        // Populate related quiz document in moduleItems
+                { path: 'programming', model: 'ProgramProblem' }  // Populate programming if needed
+            ]
+        })
+        .exec();
     if (!modules || modules.length === 0) {
         return next(new ErrorResponse(`No modules found for this course ${courseId}`, 404));
     }
+
     console.log('Modules:', modules);
+
     res.status(200).json(modules);
 })
 
@@ -173,7 +192,8 @@ export const updateModule = asyncHandler(async (req, res, next) => {
         {
             new: true,
             runValidators: true
-        }
+        },
+        console.log("Updated module", req.body)
     );
 
     res.status(200).json({
@@ -244,88 +264,5 @@ export const deleteModule = asyncHandler(async (req, res, next) => {
         session.endSession();
     }
 });
-// Module Items
 
-//@desc Get all module items
-//@route GET /api/v1/moduleItems
-//@access Public
-export const getModuleItems = asyncHandler(async (req, res, next) => {
-    const moduleItems = await ModuleItem.find();
-    res.status(200).json({ success: true, count: moduleItems.length, data: moduleItems });
-});
 
-//@desc Get single module item
-//@route GET /api/v1/moduleItems/:id
-//@access Public
-export const getModuleItem = asyncHandler(async (req, res, next) => {
-    const moduleItem = await ModuleItem.findById(req.params.id);
-    if (!moduleItem) {
-        return next(new ErrorResponse(`ModuleItem not found with id of ${req.params.id}`, 404));
-    }
-    res.status(200).json({ success: true, data: moduleItem });
-});
-
-//@desc Create new module item
-//@route POST /api/v1/moduleItems
-//@access Private
-export const createModuleItem = asyncHandler(async (req, res, next) => {
-    const moduleItem = await ModuleItem.create(req.body);
-    res.status(201).json({ success: true, data: moduleItem });
-});
-
-//@desc Update module item
-//@route PUT /api/v1/moduleItems/:id
-//@access Private
-export const updateModuleItem = asyncHandler(async (req, res, next) => {
-    let moduleItem = await ModuleItem.findById(req.params.id);
-    if (!moduleItem) {
-        return next(new ErrorResponse(`ModuleItem not found with id of ${req.params.id}`, 404));
-    }
-
-    const module = await Module.findById(moduleItem.moduleId);
-
-    if (!module) {
-        return next(new ErrorResponse(`Module not found for the module item`, 404));
-    }
-    const course = await Course.findById(module.courseId);
-
-    if (!course) {
-        return next(new ErrorResponse(`Course not found for the module`, 404));
-    }
-    if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
-        return next(new ErrorResponse(`User is not authorized to update this module item`, 401));
-    }
-
-    moduleItem = await ModuleItem.findByIdAndUpdate(req.params.id, req.body, {
-        new: true,
-        runValidators: true
-    });
-    res.status(200).json({ success: true, data: moduleItem });
-});
-
-//@desc Delete a module item
-//@route DELETE /api/v1/moduleItems/:id
-//@access Private
-export const deleteModuleItem = asyncHandler(async (req, res, next) => {
-    const moduleItem = await ModuleItem.findById(req.params.id);
-    if (!moduleItem) {
-        return next(new ErrorResponse(`ModuleItem not found with id of ${req.params.id}`, 404));
-    }
-
-    const module = await Module.findById(moduleItem.moduleId);
-
-    if (!module) {
-        return next(new ErrorResponse(`Module not found for the module item`, 404));
-    }
-    const course = await Course.findById(module.courseId);
-
-    if (!course) {
-        return next(new ErrorResponse(`Course not found for the module`, 404));
-    }
-    if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
-        return next(new ErrorResponse(`User is not authorized to update this module item`, 401));
-    }
-
-    await moduleItem.remove();
-    res.status(200).json({ success: true, data: {} });
-});

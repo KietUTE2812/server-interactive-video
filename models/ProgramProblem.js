@@ -6,7 +6,7 @@ const SubmissionSchema = new Schema({
     problemId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'ProgrammingProblem',
-        required: true
+        unique: false,
     },
     status: {
         type: String,
@@ -42,6 +42,7 @@ const TestcaseSchema = new Schema({
     problemId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'ProgrammingProblem',
+        unique: false,
         required: true
     },
     input: {
@@ -69,20 +70,19 @@ const TestcaseSchema = new Schema({
 
 // Schema cho Programming Problem 
 const ProgramProblemSchema = new Schema({
-    problemId: {
-        type: String,
-        required: true,
-        unique: true,
-        trim: true,
-        maxlength: [10, 'Problem ID cannot be more than 10 characters']
+    moduleItem: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'ModuleItem',
+        unique: false,
+
     },
-    title: {
+    problemName: {
         type: String,
         required: true,
         trim: true,
         maxlength: [100, 'Problem title cannot be more than 100 characters']
     },
-    description: {
+    content: {
         type: String,
         required: true,
         maxlength: [5000, 'Description cannot be more than 5000 characters']
@@ -118,7 +118,29 @@ const ProgramProblemSchema = new Schema({
         type: String
     },
     submissions: [SubmissionSchema],
-    testcases: [TestcaseSchema],
+    testcases: [{
+        input: {
+            type: String,
+            required: true
+        },
+        expectedOutput: {
+            type: String,
+            required: true
+        },
+        executeTimeLimit: {
+            type: Number,
+            required: true,
+            default: 1000 // milliseconds
+        },
+        isHidden: {
+            type: Boolean,
+            default: false
+        },
+        weight: {
+            type: Number,
+            default: 1
+        }
+    }],
     acceptedCount: {
         type: Number,
         default: 0
@@ -195,5 +217,7 @@ ProgramProblemSchema.pre('save', function (next) {
     }
     next();
 });
+
+
 
 export default mongoose.model('ProgramProblem', ProgramProblemSchema);

@@ -1,65 +1,15 @@
 import mongoose from "mongoose";
 const Schema = mongoose.Schema;
 
-// Schema cho câu trả lời
-const AnswerSchema = new Schema({
-    content: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    isCorrect: {
-        type: Boolean,
-        required: true,
-        default: false
-    }
-});
-
-// Schema cho câu hỏi
-const QuestionSchema = new Schema({
-    orderNumber: {
-        type: Number,
-        required: true
-    },
-    content: {
-        type: String,
-        required: true,
-        trim: true
-    },
-    type: {
-        type: String,
-        required: true,
-        enum: ['multiple-choice', 'true-false', 'only-choice'],
-        default: 'only-choice'
-    },
-    points: {
-        type: Number,
-        required: true,
-        default: 1
-    },
-    answers: [AnswerSchema],
-    explanation: {
-        type: String,
-        trim: true
-    }
-});
-
-// Schema chính cho Quiz
+// Schema  cho Quiz
 const QuizSchema = new Schema({
-    title: {
-        type: String,
-        required: true,
-        trim: true,
-        maxlength: [100, 'Title cannot be more than 100 characters']
-    },
     moduleItem: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'ModuleItem',
-    },
-    description: {
-        type: String,
-        trim: true
-    },
+        unique: false,
+
+
+    
     totalQuestions: {
         type: Number,
         default: function () {
@@ -82,7 +32,44 @@ const QuizSchema = new Schema({
         required: true,
         default: 70 // percentage
     },
-    questions: [QuestionSchema],
+    questions: [{
+        orderNumber: {
+            type: Number,
+            required: true
+        },
+        content: {
+            type: String,
+            required: true,
+            trim: true
+        },
+        type: {
+            type: String,
+            required: true,
+            enum: ['multiple-choice', 'true-false', 'only-choice'],
+            default: 'only-choice'
+        },
+        points: {
+            type: Number,
+            required: true,
+            default: 1
+        },
+        answers: [{
+            content: {
+                type: String,
+                required: true,
+                trim: true
+            },
+            isCorrect: {
+                type: Boolean,
+                required: true,
+                default: false
+            }
+        }],
+        explanation: {
+            type: String,
+            trim: true
+        }
+    }],
     createdAt: {
         type: Date,
         default: Date.now
@@ -92,7 +79,8 @@ const QuizSchema = new Schema({
         default: Date.now
     }
 }, {
-    timestamps: true
+    timestamps: true,
+    autoIndex: false,
 });
 
 // Middleware để cập nhật totalQuestions và totalPoints trước khi lưu
