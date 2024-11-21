@@ -10,7 +10,6 @@ import { checkAuth, verifyPassword } from "../controllers/authController.js";
 
 const userRoutes = express.Router();
 
-userRoutes.post('/auth-google', userCtrl.googleLoginCtrl);
 userRoutes.post('/register', userCtrl.registerUserCtrl);//register
 userRoutes.post('/login', userCtrl.loginUserCtrl);
 // userRoutes.get('/profile',isLoggedin, userCtrl.getUserProfileCtrl);
@@ -22,9 +21,9 @@ userRoutes.post('/reset-access-token', userCtrl.refreshAccessTokenCtrl);
 userRoutes.post('/verify-account', userCtrl.verifyAccountCtrl);
 
 userRoutes.get('/check-auth', protect, checkAuth);
-userRoutes.put('/:userid', isLoggedin, upload.single('avatar'), userCtrl.updateUserCtrl);//update user profile
+userRoutes.put('/:userid', isLoggedin, upload.uploadCloudinary.single('avatar'), userCtrl.updateUserCtrl);//update user profile
 userRoutes.get('/:userid', isLoggedin, userCtrl.getUserProfileCtrl);
-userRoutes.get('/', isAdmin, isLoggedin , userCtrl.getAllUserCtrl);
+userRoutes.get('/', isLoggedin , userCtrl.getAllUserCtrl);
 userRoutes.put('/update-by-admin/:userid', isLoggedin, isAdmin, userCtrl.updateUserByAdminCtrl)// update user by admin
 // userRoutes.route('/check-auth-status')
 //     .get(protect, userCtrl.checkAuthStatus)

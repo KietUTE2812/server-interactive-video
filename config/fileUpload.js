@@ -22,6 +22,6 @@ const storage = new CloudinaryStorage({
 });
 
 // Init Multer with the storage engine
-const upload = multer({ storage: storage });
-
-export default upload;
+const uploadCloudinary = multer({ storage: storage });
+const uploadMiniO = multer({ storage: multer.memoryStorage() });
+export default { uploadCloudinary, uploadMiniO };

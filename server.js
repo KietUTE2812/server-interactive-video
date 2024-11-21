@@ -11,6 +11,7 @@ const io = new Server(server, {
     }
 });
 
+
 handleSocketConnection(io);
 
 server.listen(PORT, console.log(`Server is up and running on port ${PORT}`))

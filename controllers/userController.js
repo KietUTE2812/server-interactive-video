@@ -7,6 +7,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
+import ErrorResponse from "../utils/ErrorResponse.js";
 
 
 // const checkAuthStatus = async (req, res) => {
@@ -52,12 +53,11 @@ import crypto from 'crypto';
 // })
 
 
-const verifyAccountCtrl = asyncHandler(async (req, res) => {
+const verifyAccountCtrl = asyncHandler(async (req, res, next) => {
     const { email, code } = req.body;
     const user = await User.findOne({ email });
     if (!user) {
-        res.status(404);
-        throw new Error('User not found');
+        return next(new ErrorResponse(`User not found with email of ${email}`, 404));
     }
     if (user.verifyCode == code) {
         user.status = 'active';
@@ -68,32 +68,28 @@ const verifyAccountCtrl = asyncHandler(async (req, res) => {
             message: "Verify account successfully"
         });
     } else {
-        res.status(400);
-        throw new Error('Invalid code');
+        return next(new ErrorResponse(`Invalid code`, 400));
     }
 });
 
 // @desc    Register a new user
 // @route   POST /api/v1/users/register
 // @access  Public
-const registerUserCtrl = asyncHandler(async (req, res) => {
+const registerUserCtrl = asyncHandler(async (req, res, next) => {
     const { username, email, password, fullname } = req.body;
     const userExists = await User.findOne({ email });
     //Kiểm tra password
     if (password.length < 8 || (/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[a-zA-Z\d!@#$%^&*(),.?":{}|<>]{8,}$/).test(password) === false) {
-        res.status(400);
-        throw new Error('Password is invalid');
+        return next(new ErrorResponse('Password must be at least 8 characters long and contain at least one lowercase letter, one uppercase letter, one number and one special character', 400));
     }
     //Kiểm tra xem user đã tồn tại chưa
     if (userExists) {
-        res.status(400);
-        throw new Error('Email already exists');
+        return next(new ErrorResponse('User already exists', 400));
     }
     const userExistsUsername = await User.findOne({ username });
     //Kiểm tra xem user đã tồn tại chưa
     if (userExistsUsername) {
-        res.status(400);
-        throw new Error('Username already exists');
+        return next(new ErrorResponse('Username already exists', 400));
     }
 
     // //Băm password
@@ -130,8 +126,7 @@ const registerUserCtrl = asyncHandler(async (req, res) => {
         } catch (error) {
             user.verifyCode = '';
             await user.save();
-            res.status(500);
-            throw new Error('Email could not be sent' + error);
+            return next(new ErrorResponse('Email could not be sent', 500));
         }
         res.status(201).json({
             status: "success",
@@ -139,10 +134,8 @@ const registerUserCtrl = asyncHandler(async (req, res) => {
             data: user
         });
     } else {
-        res.status(400);
-        throw new Error('Invalid user data');
+        return next(new ErrorResponse('Invalid user data', 400));
     }
-    //Create verify url
 
 }
 );
@@ -150,7 +143,7 @@ const registerUserCtrl = asyncHandler(async (req, res) => {
 // @desc    Login user
 // @route   POST /api/v1/users/login
 // @access  Public
-const loginUserCtrl = asyncHandler(async (req, res) => {
+const loginUserCtrl = asyncHandler(async (req, res, next) => {
     const { isGoogle, isFacebook, isGitHub } = req.body;
 
     try {
@@ -203,7 +196,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     message: "Login successfully",
                     data: {
                         user: user,
-                        token: token.generateToken(user._id)
+                        token: token.generateToken(user)
                     }
                 });
             }
@@ -230,7 +223,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     message: "Login successfully",
                     data: {
                         user: user,
-                        token: token.generateToken(user._id)
+                        token: token.generateToken(user)
                     }
                 });
             }
@@ -286,7 +279,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     message: "Login successfully",
                     data: {
                         user: user,
-                        token: token.generateToken(user._id)
+                        token: token.generateToken(user)
                     }
                 });
             }
@@ -313,7 +306,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     message: "Login successfully",
                     data: {
                         user: user,
-                        token: token.generateToken(user._id)
+                        token: token.generateToken(user)
                     }
                 });
             }
@@ -321,7 +314,7 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
         }
         else {
             const { email, password } = req.body;
-            const user = await User.findOne({ email });
+            const user = await User.findOne({ email, status: 'active' });
             //Kiểm tra xem user đã tồn tại chưa
             if (user && (await bcrypt.compare(password, user?.password))) {
                 //Tạo Refreshtoken
@@ -338,19 +331,17 @@ const loginUserCtrl = asyncHandler(async (req, res) => {
                     message: "Login successfully",
                     data: {
                         user,
-                        token: token.generateToken(user._id)
+                        token: token.generateToken(user)
                     }
                 });
             } else {
-                res.status(401);
-                throw new Error('Invalid email or password');
+                return next(new ErrorResponse('Invalid credentials', 401));
             }
         }
 
     }
     catch (error) {
-        res.status(401);
-        throw new Error('Login failed' + error);
+        return next(new ErrorResponse(error.message, 500));
     }
 
 });
@@ -369,8 +360,7 @@ const getUserProfileCtrl = asyncHandler(async (req, res) => {
             data: user
         });
     } else {
-        res.status(404);
-        throw new Error('User not found');
+        return next(new ErrorResponse('User not found', 404));
     }
     console.log("get profile user");
 
@@ -379,15 +369,14 @@ const getUserProfileCtrl = asyncHandler(async (req, res) => {
 // @desc    Update user profile
 // @route   PUT /api/v1/users/update-profile
 // @access  Private
-const updateUserCtrl = asyncHandler(async (req, res) => {
+const updateUserCtrl = asyncHandler(async (req, res, next) => {
     const userId = req.params.userid;
     const filePath = req.file?.path;
     const { fullname, bio, phone } = req.body;
     // Kiểm tra xem user đã tồn tại chưa
     const user = await User.findById(userId);
     if (!user) {
-        res.status(404);
-        throw new Error('User not found');
+        return next(new ErrorResponse('User not found', 404));
     }
     // Cập nhật thông tin user
     user.profile.fullname = fullname || user.profile.fullname;
@@ -409,15 +398,14 @@ const updateUserCtrl = asyncHandler(async (req, res) => {
 // @desc    Update user profile
 // @route   PUT /api/v1/users/update-profile
 // @access  Private
-const updateUserByAdminCtrl = asyncHandler(async (req, res) => {
+const updateUserByAdminCtrl = asyncHandler(async (req, res, next) => {
     const adminId = req.params.userid;
     const filePath = req.file?.path;
     const { fullname, bio, phone, userId, status, role } = req.body;
     // Kiểm tra xem user đã tồn tại chưa
     const admin = await User.findById(adminId);
     if (!admin) {
-        res.status(404);
-        throw new Error('You are not an admin');
+        return next(new ErrorResponse('User not found', 404));
     }
 
     const user = await User.findById(userId).select('profile userId status role fullname bio phone');
@@ -446,13 +434,13 @@ const updateUserByAdminCtrl = asyncHandler(async (req, res) => {
 // @desc    Forgot password (email)
 // @route   POST /api/v1/users/forgot-password
 // @access  Public
-export const forgotPasswordCtrl = asyncHandler(async (req, res) => {
+export const forgotPasswordCtrl = asyncHandler(async (req, res, next) => {
     const { email } = req.body;
 
     // Check if the user exists
     const user = await User.findOne({ email });
     if (!user) {
-        throw new Error("User not found with this email");
+        return next(new ErrorResponse('There is no user with that email', 404));
     }
 
     // Tạo token chứa 10 ký tự ngẫu nhiên
@@ -478,14 +466,14 @@ export const forgotPasswordCtrl = asyncHandler(async (req, res) => {
             message: 'Token sent to email!'
         });
     } catch (err) {
-        throw new Error("There was an error sending the email. Try again later.");
+        return next(new ErrorResponse('Email could not be sent', 500));
     }
 });
 
 // @desc    Reset password (token, new password)
 // @route   GET /api/v1/users/reset-password/:token
 // @access  Public
-export const resetPasswordCtrl = asyncHandler(async (req, res) => {
+export const resetPasswordCtrl = asyncHandler(async (req, res, next) => {
     const { code, password } = req.body;
 
     try {
@@ -494,7 +482,7 @@ export const resetPasswordCtrl = asyncHandler(async (req, res) => {
 
         // Kiểm tra user
         if (!user) {
-            throw new Error("User not found or token has expired");
+            return next(new ErrorResponse('Token is invalid or has expired', 400));
         }
 
         // Set new password
@@ -507,18 +495,18 @@ export const resetPasswordCtrl = asyncHandler(async (req, res) => {
         res.status(200).json({
             status: 'success',
             message: 'Password reset successful!',
-            token: token.generateToken(user._id),
+            token: token.generateToken(user),
         });
     } catch (err) {
         // Handle invalid or expired token
-        throw new Error("Token is invalid or has expired" + err);
+        return next(new ErrorResponse('Invalid token or token was expired', 400));
     }
 });
 
 // @desc Delete user
 // @route DELETE /api/v1/users/:userid
 // @access Private/Admin
-const deleteUserCtrl = asyncHandler(async (req, res) => {
+const deleteUserCtrl = asyncHandler(async (req, res, next) => {
     const user = await User.findById(req.params.userid);
     if (user) {
         await User.updateOne({ _id: req.params.userid }, { status: 'removed' });
@@ -528,57 +516,9 @@ const deleteUserCtrl = asyncHandler(async (req, res) => {
         });
     }
     else {
-        res.status(404);
-        throw new Error('User not found');
+        return next(new ErrorResponse('User not found', 404));
     }
 });
-
-
-const client = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
-const verify = async (token) => {
-    const ticket = await client.verifyIdToken({
-        idToken: token,
-        audience: process.env.GOOGLE_CLIENT_ID
-    });
-    return ticket.getPayload();
-}
-
-// @desc    Google login
-// @route   POST /api/v1/users/auth-google
-// @access  Public
-
-const googleLoginCtrl = asyncHandler(async (req, res) => {
-    const { token } = req.body;
-    if (token) {
-        const payload = await verify(token);
-        const { email, name, picture, sub } = payload;
-        let user = await User.findOne({ email, googleId: sub });
-        if (user) {
-            user = await User.create({
-                googleId: sub,
-                email: email,
-                fullname: name,
-                profile: { picture: picture },
-                role: 'student'
-            });
-        }
-        res.json({
-            status: "success",
-            message: "Login successfully",
-            data: {
-                user,
-                token: generateToken(user._id)
-            }
-        });
-    } else {
-        res.status(400);
-        throw new Error('Invalid token');
-    }
-});
-
-// @desc    Refresh token
-// @route   POST /api/v1/users/refresh-token
-// @access  Public
 
 function getCookieValue(cookieString, name) {
     // Tách các cookie thành mảng
@@ -591,25 +531,22 @@ function getCookieValue(cookieString, name) {
     return cookie ? cookie.split('=')[1] : null;
 }
 
-const refreshAccessTokenCtrl = asyncHandler(async (req, res) => {
+// @desc    Refresh token
+// @route   POST /api/v1/users/refresh-token
+// @access  Public
+const refreshAccessTokenCtrl = asyncHandler(async (req, res, next) => {
     const cookie = req.headers.cookie;
     const refreshToken = getCookieValue(cookie, 'refreshToken');
     if (!cookie && !refreshToken) {
-        const err = new Error('No cookie');
-        err.statusCode = 404;
-        throw err;
+        return next(new ErrorResponse('No cookie, no refresh, must login', 401));
     }
     await jwt.verify(refreshToken, process.env.JWT_SECRET, async (error, decoded) => {
         if (error) {
-            const err = new Error('Invalid refresh token, you must login again');
-            err.statusCode = 403;
-            throw err;
+            return next(new ErrorResponse('Invalid refresh token', 403));
         }
         const user = await User.findById(decoded._id);
         if (!user || user.refreshToken !== refreshToken) {
-            const err = new Error('User not found or invalid refresh token');
-            err.statusCode = 403;
-            throw err;
+            return next(new ErrorResponse('Invalid refresh token', 403));
         }
         res.cookie('refreshToken', refreshToken, {
             httpOnly: true,
@@ -621,7 +558,7 @@ const refreshAccessTokenCtrl = asyncHandler(async (req, res) => {
             message: "Refresh access token successfully",
             data: {
                 success: true,
-                newToken: token.generateToken(user._id)
+                newToken: token.generateToken(user)
             }
         });
     }
@@ -635,16 +572,12 @@ const refreshAccessTokenCtrl = asyncHandler(async (req, res) => {
 const logoutCtrl = asyncHandler(async (req, res) => {
     const cookie = req.headers.cookie;
     if (!cookie) {
-        const err = new Error('No cookie, no refresh, must logout');
-        err.statusCode = 401;
-        throw err;
+        return next(new ErrorResponse('No cookie, no refresh, must login', 401));
     }
     const refreshToken = cookie.split('=')[1];
     //Kiểm tra xem có cookie và refreshToken không
     if (!refreshToken) {
-        const err = new Error('No cookie, no refresh, must logout');
-        err.statusCode = 401;
-        throw err;
+        return next(new ErrorResponse('No cookie, no refresh, must login', 401));
     }
     //Xóa refreshToken trong db
     await User.findOneAndUpdate({ refreshToken }, { refreshToken: '' }, { new: true });
@@ -656,19 +589,62 @@ const logoutCtrl = asyncHandler(async (req, res) => {
     });
 });
 
-// @desc    Get all user
-// @route   GET /api/v1/users
-// @access  Private/Admin
+// @desc Get users by Filter and Pagination
+// @route GET api/v1/users?limit=1&page=1&filter={}
+// @access Private Admin, Private Intructors
 const getAllUserCtrl = asyncHandler(async (req, res) => {
-    const users = await User.find().select('-password -refreshToken');
-    res.json({
+    const { limit, page, ...filters } = req.query;
+    const query = filters;
+    if(req.user.role !== 'admin' && limit >= 10 && page >=1) {
+        return next(new ErrorResponse('Not authorized to access this route', 401));
+    }
+    // Filter by email
+    if (filters.email) {
+        query.email = { $regex: filters.email, $options: 'i' };
+    }
+
+    // Filter by fullname
+    if (filters.fullname) {
+        query['profile.fullname'] = { $regex: filters.fullname, $options: 'i' };
+        delete query.fullname;
+    }
+
+    // Filter by username
+    if (filters.username) {
+        query.username = { $regex: filters.username, $options: 'i' };
+    }
+
+    // Filter by role
+    if (filters.role) {
+        query.role = filters.role;
+    }
+    if (filters.courseId) {
+        query.enrolled_courses = { $in: [filters.courseId] };
+    }
+
+    // Filter by status
+    if (filters.status) {
+        query.status = filters.status;
+    }
+    console.log(query);
+    const users = await User.find(query)
+        .limit(limit)
+        .skip(limit * (page - 1)).select('profile email username role status');
+    const total = await User.countDocuments(query);
+
+    res.status(200).json({
         status: "success",
-        data: users
-    })
+        total,
+        limit,
+        page,
+        data: {
+            users
+        }
+    });
 });
 
 export default {
     registerUserCtrl, loginUserCtrl, getUserProfileCtrl, updateUserCtrl,
-    forgotPasswordCtrl, resetPasswordCtrl, deleteUserCtrl, googleLoginCtrl,
+    forgotPasswordCtrl, resetPasswordCtrl, deleteUserCtrl,
     refreshAccessTokenCtrl, logoutCtrl, verifyAccountCtrl, getAllUserCtrl, updateUserByAdminCtrl
 };
