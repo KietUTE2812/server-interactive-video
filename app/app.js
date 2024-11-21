@@ -5,8 +5,8 @@ import paymentsRoute from "../routes/paymentsRoute.js";
 import conversationRoute from "../routes/conversationRoute.js";
 import { globalErrHandler, notFound } from "../middlewares/globalErrHandler.js";
 import dotenv from 'dotenv';
-import Redis from 'ioredis';
-import { rateLimiter } from "../middlewares/rateLimiter.js";
+// import Redis from 'ioredis';
+// import { rateLimiter } from "../middlewares/rateLimiter.js";
 import cors from 'cors';
 import ErrorResponse from '../utils/ErrorResponse.js';
 
@@ -20,15 +20,18 @@ import authRoute from '../routes/authRoute.js';
 import reviewRoute from "../routes/reviewRoute.js";
 import quizRoute from "../routes/quizRoute.js";
 import roadmapRoute from "../routes/roadmapRoute.js";
+import moduleRoute from "../routes/moduleRoute.js";
+import chunkUpload from "../routes/ChunkUpload.js";
+import notificationRoute from "../routes/notificationRoute.js";
 
-// Use environment variables for Redis connection
-const redisHost = process.env.REDIS_HOST || 'localhost';
-const redisPort = process.env.REDIS_PORT || 6379;
+// // Use environment variables for Redis connection
+// const redisHost = process.env.REDIS_HOST || 'localhost';
+// const redisPort = process.env.REDIS_PORT || 6379;
 
-export const Client = new Redis({
-  host: redisHost,
-  port: redisPort,
-});
+// export const Client = new Redis({
+//   host: redisHost,
+//   port: redisPort,
+// });
 dotenv.config();
 //db connect
 dbConnect();
@@ -36,7 +39,9 @@ dbConnect();
 
 const app = express();
 
-app.use(express.json())
+app.use(express.json({
+    limit: '*'
+}))
 // Enable CORS
 app.use(cors({
   origin: 'http://localhost:5173', // Hoặc dùng '*' nếu muốn cho phép mọi nguồn
@@ -89,7 +94,9 @@ app.use('/api/v1/conversations', conversationRoute);
 app.use('/api/v1/reviews', reviewRoute)
 app.use('/api/v1/quizzes', quizRoute)
 app.use('/api/v1/roadmap', roadmapRoute)
-
+app.use('/api/v1/modules', moduleRoute)
+app.use('/api/v1/uploads', chunkUpload)
+app.use('/api/v1/notifications', notificationRoute)
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {
   console.error(err.stack);

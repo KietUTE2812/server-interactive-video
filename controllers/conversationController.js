@@ -1,14 +1,15 @@
 import Conversation from '../models/Conversation.js';
 import Message from '../models/Message.js';
-export const createConversation = async (req, res) => {
-    const { participants, type } = req.body;
+import ErrorResponse from "../utils/ErrorResponse.js";
+export const createConversation = async (req, res, next) => {
+    const { participants, type = 'direct' } = req.body;
 
     if (!participants || !Array.isArray(participants) || participants.length < 2) {
-        return res.status(400).json({ success: false, message: 'Participants must be an array of at least 2 user IDs' });
+        return next(new ErrorResponse('Please provide at least 2 participants', 400));
     }
 
     if (type !== 'direct' && type !== 'group') {
-        return res.status(400).json({ success: false, message: 'Invalid conversation type' });
+        return next(new ErrorResponse('Invalid conversation type', 400));
     }
 
     try {
@@ -19,22 +20,29 @@ export const createConversation = async (req, res) => {
             type,
             participants
         });
-
-        res.status(201).json({ success: true, data: conversation });
+        const result = await Conversation.findById(conversation._id).populate('participants', 'profile');
+        res.status(201).json({ success: true, data: result });
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        return next(new ErrorResponse('Internal server error', 500));
     }
 }
 
-export const getConversations = async (req, res) => {
-    const { userId } = req.query;
-
+export const getConversations = async (req, res, next) => {
+    const { userId, participants } = req.query;
     try {
+        // Nếu có participants, tìm cuộc hội thoại có các participants trong mảng `participants`
+        if (participants) {
+            const arrParticipants = participants.split(',');
+            const conversations = await Conversation.find({ participants: { $all: arrParticipants } }).populate('participants', 'profile');
+            return res.status(200).json({ success: true, data: conversations });
+        }
         // Nếu `userId` tồn tại, tìm các cuộc hội thoại có `userId` trong mảng `participants`
         const filter = userId ? { participants: { $in: [userId] } } : {};
         
         const conversations = await Conversation.find(filter).populate('participants', 'profile');
+        if(conversations.length === 0) {
+            return next(new ErrorResponse(`No conversation found`, 404));
+        }
 
         // Dùng Promise.all để gán lastMessage cho từng cuộc hội thoại
         const conversationsWithLastMessage = await Promise.all(
@@ -48,17 +56,15 @@ export const getConversations = async (req, res) => {
                 return { ...conversation.toObject(), lastMessage };
             })
         );
-
         res.status(200).json({ success: true, data: conversationsWithLastMessage });
 
     } catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        return next(new ErrorResponse('Internal server error', 500));
     }
 };
 
 
-export const getConversation = async (req, res) => {
+export const getConversation = async (req, res, next) => {
     const { conversationId } = req.params;
     const page = parseInt(req.query.page) || 1;  // Trang hiện tại
     const limit = parseInt(req.query.limit) || 20;  // Số lượng tin nhắn mỗi trang
@@ -67,7 +73,7 @@ export const getConversation = async (req, res) => {
         const skip = (page - 1) * limit;  // Số lượng tin nhắn bỏ qua
         const conversation = await Conversation.findOne({ conversationId });
         if (!conversation) {
-            return res.status(404).json({ success: false, message: 'Conversation not found' });
+            return next(new ErrorResponse('Conversation not found', 404));
         }
         const messages = await Message.find({ conversationId })
             .sort({ timestamp: -1 })  // Sắp xếp giảm dần để lấy tin nhắn cũ hơn
@@ -79,7 +85,6 @@ export const getConversation = async (req, res) => {
         } });
     }
     catch (error) {
-        console.error(error);
-        res.status(500).json({ success: false, message: 'Internal server error' });
+        return next(new ErrorResponse('Internal server error', 500));
     }
 }
