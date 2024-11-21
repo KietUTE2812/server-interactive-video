@@ -45,7 +45,7 @@ export const createModuleItemSupplement = asyncHandler(async (req, res, next) =>
     if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
         return next(new ErrorResponse(`User is not authorized to create module item`, 401));
     }
-    const bucketName = process.env.MINIO_BUCKET_PDF;
+    const bucketName = process.env.MINIO_BUCKET_NAME;
     const objectName = Date.now() + '-' + req.file.originalname;
 
     const bucketExists = await minioClient.bucketExists(bucketName);
@@ -62,7 +62,7 @@ export const createModuleItemSupplement = asyncHandler(async (req, res, next) =>
             'Content-Type': req.file.mimetype
         }
     );
-    //const url = await minioClient.presignedGetObject(bucketName, objectName, 7 * 24 * 60 * 60);
+    const url = `${process.env.MINIO_URL}/${objectName}`;
 
 
     const session = await mongoose.startSession();
@@ -78,7 +78,7 @@ export const createModuleItemSupplement = asyncHandler(async (req, res, next) =>
             type: 'supplement',
             contentType: 'Reading',
             icon: 'read',
-            reading: objectName.toString(),
+            reading: url.toString(),
         };
 
         // Use create with session in array format as per MongoDB best practices
@@ -168,7 +168,7 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
             }
 
             // Upload to MinIO with error handling
-            const bucketName = process.env.MINIO_BUCKET_VIDEO;
+            const bucketName = process.env.MINIO_BUCKET_NAME;
             const objectName = `${Date.now()}-${req.file.originalname}`;
 
             try {
@@ -210,8 +210,9 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
                 }));
 
             // Create video document
+            const url = `${process.env.MINIO_URL}/${objectName}`;
             const videoData = {
-                file: objectName,
+                file: url.toString(),
                 duration: req.body.duration,
                 questions: validQuestions,
             };
@@ -447,27 +448,27 @@ export const getModuleItemById = asyncHandler(async (req, res, next) => {
     if (!moduleItem) {
         return next(new ErrorResponse(`No module item found with id ${moduleItemId}`, 404));
     }
-    if (moduleItem.reading) {
-        const bucketName = process.env.MINIO_BUCKET_PDF;
-        const objectName = moduleItem.reading;
-        const bucketExists = await minioClient.bucketExists(bucketName);
-        if (!bucketExists) {
-            return next(new ErrorResponse('Bucket not found', 404));
-        }
-        const url = await minioClient.presignedGetObject(bucketName, objectName, 7 * 24 * 60 * 60);
-        moduleItem.reading = url;
-    }
+    // if (moduleItem.reading) {
+    //     const bucketName = process.env.MINIO_BUCKET_NAME;
+    //     const objectName = moduleItem.reading;
+    //     const bucketExists = await minioClient.bucketExists(bucketName);
+    //     if (!bucketExists) {
+    //         return next(new ErrorResponse('Bucket not found', 404));
+    //     }
+    //     const url = await minioClient.presignedGetObject(bucketName, objectName, 7 * 24 * 60 * 60);
+    //     moduleItem.reading = url;
+    // }
 
-    if (moduleItem.video) {
-        const bucketName = process.env.MINIO_BUCKET_VIDEO;
-        const objectName = moduleItem.video.file;
-        const bucketExists = await minioClient.bucketExists(bucketName);
-        if (!bucketExists) {
-            return next(new ErrorResponse('Bucket not found', 404));
-        }
-        const url = await minioClient.presignedGetObject(bucketName, objectName, 7 * 24 * 60 * 60);
-        moduleItem.video.file = url;
-    }
+    // if (moduleItem.video) {
+    //     const bucketName = process.env.MINIO_BUCKET_NAME;
+    //     const objectName = moduleItem.video.file;
+    //     const bucketExists = await minioClient.bucketExists(bucketName);
+    //     if (!bucketExists) {
+    //         return next(new ErrorResponse('Bucket not found', 404));
+    //     }
+    //     const url = await minioClient.presignedGetObject(bucketName, objectName, 7 * 24 * 60 * 60);
+    //     moduleItem.video.file = url;
+    // }
     res.status(200).json({
         success: true,
         data: moduleItem
