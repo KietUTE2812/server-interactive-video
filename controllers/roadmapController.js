@@ -5,14 +5,14 @@ import generateRoadmap from "../utils/generateByOpenAI.js";
 import Roadmap from "../models/Roadmap.js";
 
 const createRoadmap = asyncHandler(async (req, res, next) => {
-    const {formData} = req.body;
+    const { formData } = req.body;
     const userId = req.user._id;
     console.log(formData)
     const user = await User.findById(userId);
-    if(!user) {
+    if (!user) {
         return next(new ErrorResponse(`User not found with id of ${userId}`, 404));
     }
-    if(!formData.learningGoal || !formData.timeCommitment) {
+    if (!formData.learningGoal || !formData.timeCommitment) {
         return next(new ErrorResponse('Please provide all required fields', 400));
     }
     const prompt = `
@@ -156,7 +156,7 @@ const Roadmap = mongoose.model('Roadmap', RoadmapSchema);
 module.exports = Roadmap;
         `;
     const response = await generateRoadmap(prompt);
-    if(!response || !response.data.title) {
+    if (!response || !response.data.title) {
         return next(new ErrorResponse('Failed to generate roadmap', 500));
     }
     const data = response.data
@@ -171,7 +171,7 @@ module.exports = Roadmap;
         difficulty: data.difficulty,
         estimatedTimeInMonths: data.estimatedTimeInMonths
     });
-    if(!roadmap) {
+    if (!roadmap) {
         return next(new ErrorResponse('Failed to create roadmap', 500));
     }
     res.json({ success: true, data: roadmap });
@@ -180,11 +180,11 @@ module.exports = Roadmap;
 const getRoadmaps = asyncHandler(async (req, res, next) => {
     const filter = req.query;
     let roadmap = null
-    if(filter.userId)
+    if (filter.userId)
         roadmap = await Roadmap.findOne({ creator: filter.userId });
-    else if(filter !== {})
+    else if (filter != {})
         roadmap = await Roadmap.find(filter);
-    if(!roadmap) {
+    if (!roadmap) {
         return next(new ErrorResponse(`Roadmap not found`, 404));
     }
     res.json({ success: true, data: roadmap });

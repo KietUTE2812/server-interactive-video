@@ -78,7 +78,7 @@ export const getModuleById = asyncHandler(async (req, res, next) => {
     });
 
     // Tính phần trăm hoàn thành của module
-    const completionPercentage =  userProgress.completionPercentage
+    const completionPercentage = userProgress.completionPercentage
 
     res.status(200).json({
         success: true,
@@ -100,11 +100,6 @@ export const getModuleById = asyncHandler(async (req, res, next) => {
  */
 export const createModule = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
-
-    // Debug
-    console.log('Course ID from params:', id);
-    console.log('Request body:', req.body);
-
     // 1. Tìm course bằng courseId (string)
     const course = await Course.findOne({ courseId: id });
     if (!course) {

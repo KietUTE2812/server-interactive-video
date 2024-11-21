@@ -7,9 +7,7 @@ const QuizSchema = new Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'ModuleItem',
         unique: false,
-
-
-    
+    },
     totalQuestions: {
         type: Number,
         default: function () {
