@@ -1,5 +1,6 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
+import Notification from "../models/Notification.js";
 
 export const handleSocketConnection = (io) => {
     const users = new Map(); // User online
@@ -50,6 +51,11 @@ export const handleSocketConnection = (io) => {
         socket.on('conversation:out', handleConversationOut);
         socket.on('conversation:create', handleConversationCreate)
         socket.on('disconnect', handleUserDisconnect); // disconection
+        socket.on('conversation:recall', async ({userId}) => {
+            console.log('recall:', userId);
+            const conversations = await getConversationsByUserId(userId);
+            io.to(`user:${userId}`).emit('conversation:list', conversations);
+        })
         
         async function handleUserLogin({ userId, username, picture }) {
             const userExist = userSockets.get(userId);
@@ -82,7 +88,15 @@ export const handleSocketConnection = (io) => {
         async function handleConversationJoin({ conversationId }) {
             try {
                 let conversation = activeConversations.get(conversationId);
-                conversation.joining = [...conversation.joining, socket.userId]
+                console.log('conversation:', conversationId);
+                if(!conversation) {
+                    const data = await Conversation.findById(conversationId).populate('participants', 'profile').lean();
+                    conversation = {...data, messages: []};
+                    activeConversations.set(conversationId, conversation);
+                }
+                if(conversation?.joining === undefined)
+                    conversation = {...conversation, joining: []};
+                conversation.joining.push(socket.userId)
                 console.log('conversation:', conversation.joining);
 
                 if (!conversation.participants.some(p => p._id.toString() === socket.userId)) {
@@ -159,7 +173,7 @@ export const handleSocketConnection = (io) => {
             }
         }
         async function handleMessageSend({ conversationId, content, type = MESSAGE_TYPES.TEXT }) {
-            const conversation = activeConversations.get(conversationId);
+            let conversation = activeConversations.get(conversationId);
             if (!conversation) return;
             const message = {
                 messageId: Date.now().toString(),
@@ -171,12 +185,25 @@ export const handleSocketConnection = (io) => {
                 readers: conversation.joining,
                 status: 'sent',
             };
-            
+            if(conversation.messages === undefined)
+                conversation = {...conversation, messages: []};
             conversation.messages.push(message);
             conversation.lastMessage = message;
             conversation.unreadCount += 1;
             
             await Message.create(message)
+
+            const notification = await Notification.create({
+                title: 'New message from ' + users.get(socket.userId).username,
+                message: content,
+                user: conversation.participants.filter(p => p._id.toString() !== socket.userId)[0]._id,
+                link: `/chat`,
+                metadata: {
+                    conversationId,
+                }
+            })
+
+            io.to(`user:${notification.user}`).emit('notification:new', notification);
             
             io.to(conversationId).emit('message:new', { message });
             // Gửi cập nhật đến các user không có trong danh sách `joining`

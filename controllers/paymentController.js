@@ -98,8 +98,6 @@ const getPaymentsByUserId = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`User not found with id of ${userId}`, 404));
     }
 
-    
-
     const payments = await Payment.find({ userId: userId })
         .populate('userId').populate('courseId');
     res.status(200).json({ success: true, count: payments.length, data: payments });
@@ -145,7 +143,7 @@ const createPayment = asyncHandler(async (req, res, next) => {
     // Kiểm tra payment có tồn tại không
     const checkPayment = await Payment.findOne({ userId: userId, courseId: course._id});
     if (checkPayment) {
-        return res.status(400).json({ success: false, message: 'Payment already exists' });
+        return next(new ErrorResponse(`Payment already exists with user id of ${userId} and course id of ${course._id}`, 400));
     }
     //Tạo payment
     const payment = await Payment.create({
@@ -223,7 +221,6 @@ const vnpayReturn = asyncHandler(async (req, res, next) => {
         if (verify.isSuccess === true) {
             const course = await Course.findById(payment.courseId)
             if (!course){
-                console.log('Course not found', payment.courseId);
                 return res.redirect(`${process.env.CLIENT_URL}/vnpay_return?status=failed`);
             }
             const user = await User.findById(payment.userId);

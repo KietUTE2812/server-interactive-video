@@ -75,7 +75,11 @@ const ModuleItemSchema = new Schema({
     programming: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Programming'
-    }
+    },
+    video: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Video'
+    },
 
 
 
