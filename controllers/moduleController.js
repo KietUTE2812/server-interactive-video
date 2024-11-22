@@ -48,7 +48,7 @@ export const getModulesByCourseId = asyncHandler(async (req, res, next) => {
 
 export const getModuleById = asyncHandler(async (req, res, next) => {
     const moduleId = req.params.id;
-
+    console.log('Module ID:', moduleId);
     // Lấy module và populate moduleItems
     const module = await Module.findById(moduleId).populate('moduleItems');
     if (!module) {
@@ -78,7 +78,7 @@ export const getModuleById = asyncHandler(async (req, res, next) => {
     });
 
     // Tính phần trăm hoàn thành của module
-    const completionPercentage = userProgress.completionPercentage
+    const completionPercentage = userProgress?.completionPercentage
 
     res.status(200).json({
         success: true,
@@ -261,3 +261,75 @@ export const deleteModule = asyncHandler(async (req, res, next) => {
 });
 
 
+export const getAllModuleByModuleItemId = asyncHandler(async (req, res, next) => {
+    const { itemId } = req.params;
+    console.log('Module item ID:', itemId);
+
+    try {
+        // Find the module item first
+        const moduleItem = await ModuleItem.findById(itemId);
+        console.log('Module Item:', moduleItem);
+
+        if (!moduleItem) {
+            return next(new ErrorResponse(`No module item found with ID ${itemId}`, 404));
+        }
+
+        // Find the module
+        const module = await Module.findById(moduleItem.module);
+        console.log('Module:', module);
+
+        if (!module) {
+            return next(new ErrorResponse(`No module found for module item ${itemId}`, 404));
+        }
+
+        // Return all modules for the course
+        const course = await Course.findById(module.courseId).populate('modules');
+        console.log('Course:', course);
+
+
+        console.log('Modules:', course.modules);
+
+        res.status(200).json({
+            success: true,
+            count: course.modules.length,
+            data: course.modules
+        });
+    } catch (error) {
+        console.error('Error in getAllModuleByModuleItemId:', error);
+        next(new ErrorResponse('Error retrieving modules', 500));
+    }
+});
+
+
+export const getModuleByModuleItemId = asyncHandler(async (req, res, next) => {
+    const { itemId } = req.params;
+
+    try {
+        // Find the module item first
+        const moduleItem = await ModuleItem.findById(itemId);
+        console.log('Module Item:', moduleItem);
+
+        if (!moduleItem) {
+            return next(new ErrorResponse(`No module item found with ID ${itemId}`, 404));
+        }
+
+        // Find the module
+        const module = await Module.findById(moduleItem.module).populate('moduleItems');
+        console.log('Module:', module);
+
+        if (!module) {
+            return next(new ErrorResponse(`No module found for module item ${itemId}`, 404));
+        }
+
+
+
+        res.status(200).json({
+            success: true,
+            count: module.length,
+            data: module
+        });
+    } catch (error) {
+        console.error('Error in getAllModuleByModuleItemId:', error);
+        next(new ErrorResponse('Error retrieving modules', 500));
+    }
+});

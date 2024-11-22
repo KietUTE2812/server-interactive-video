@@ -31,7 +31,9 @@ import {
     getModulesByCourseId,
     createModule,
 
-    getModuleById
+    getModuleById,
+    getAllModuleByModuleItemId,
+    getModuleByModuleItemId
 
 } from "../controllers/moduleController.js";
 
@@ -94,10 +96,11 @@ router.route('/:id/modules')
     .post(protect, authorize('admin', 'instructor'), createModule);
 
 router.route('/:id/modules/:moduleId')
-    // .get(protect, getModule)
+    .get(protect, getModuleById)
     .put(protect, authorize('admin', 'instructor'), updateModule)
     .delete(protect, authorize('admin', 'instructor'), deleteModule);
-
+router.route('/modules/:id')
+    .get(protect, getModuleById)
 // ModuleItem routes
 router.route('/:id/modules/:moduleId/lessons')
 
@@ -124,6 +127,13 @@ router.route('/:id/modules/:moduleId/lecture')
 router.route('/:id/modules/:moduleId/programming')
     .get(protect)
     .post(protect, authorize('admin', 'instructor'), createModuleItemProgramming);
+
+
+router.route('/moduleitem/getAllModule/:itemId')
+    .get(protect, authorize('admin', 'instructor', 'student'), getAllModuleByModuleItemId);
+
+router.route('/moduleitem/getModule/:itemId')
+    .get(protect, authorize('admin', 'instructor', 'student'), getModuleByModuleItemId);
 
 // get the module items for a module
 router.route('/moduleitem/:moduleItemId')
