@@ -19,7 +19,7 @@ import Progress from "../models/Progress.js";
 export const getModulesByCourseId = asyncHandler(async (req, res, next) => {
 
     const courseId = req.params.id;
-    const course = await Course.findOne({ courseId: courseId });
+    const course = await Course.findById(courseId);
     if (!course) {
         return next(new ErrorResponse(`No found course with id ${courseId}`, 404));
     }
@@ -43,7 +43,7 @@ export const getModulesByCourseId = asyncHandler(async (req, res, next) => {
 })
 
 //@desc get single module by course ID and module ID
-//@route GET /api/v1/learns/modules/:id
+//@route GET /api/v1/modules/:id
 //@access Public
 
 export const getModuleById = asyncHandler(async (req, res, next) => {
@@ -60,7 +60,6 @@ export const getModuleById = asyncHandler(async (req, res, next) => {
         userId: req.user._id,
         moduleId: moduleId
     });
-
     // Nếu không có progress, mặc định tất cả moduleItems chưa được hoàn thành
     const moduleItemsWithProgress = module.moduleItems.map(item => {
         // Tìm trạng thái hoàn thành của từng moduleItem trong Progress (nếu có)
@@ -78,7 +77,7 @@ export const getModuleById = asyncHandler(async (req, res, next) => {
     });
 
     // Tính phần trăm hoàn thành của module
-    const completionPercentage = userProgress.completionPercentage
+    const completionPercentage = userProgress?.completionPercentage
 
     res.status(200).json({
         success: true,

@@ -20,7 +20,7 @@ import authRoute from '../routes/authRoute.js';
 import reviewRoute from "../routes/reviewRoute.js";
 import quizRoute from "../routes/quizRoute.js";
 import roadmapRoute from "../routes/roadmapRoute.js";
-// import moduleRoute from "../routes/moduleRoute.js";
+import moduleRoute from "../routes/moduleRoute.js";
 // import chunkUpload from "../routes/ChunkUpload.js";
 import notificationRoute from "../routes/notificationRoute.js";
 
@@ -94,7 +94,7 @@ app.use('/api/v1/conversations', conversationRoute);
 app.use('/api/v1/reviews', reviewRoute)
 app.use('/api/v1/quizzes', quizRoute)
 app.use('/api/v1/roadmap', roadmapRoute)
-// app.use('/api/v1/modules', moduleRoute)
+app.use('/api/v1/modules', moduleRoute)
 // app.use('/api/v1/uploads', chunkUpload)
 app.use('/api/v1/notifications', notificationRoute)
 // Middleware xử lý lỗi

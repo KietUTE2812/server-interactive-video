@@ -104,13 +104,24 @@ export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
 // @desc    Get course by Instructor
 // @route   GET /api/courses/:id query: {userId}
 export const getCourseById = asyncHandler(async (req, res) => {
-    const userId = req.query.userId;
+    const userId = req.user._id;
     const user = await User.findById(userId);
     if (!user) {
         res.status(404);
         throw new Error('User not found');
     }
-    const course = await Course.findById(req.params.id);
+    const course = await Course.findById(req.params.id).populate({
+        path: 'modules',
+        select: 'index title moduleItems description', // Lấy thêm moduleItems
+        populate: {
+            path: 'moduleItems', // Populate thêm thông tin của moduleItems
+            select: 'title content type' // Chọn các trường cần thiết của moduleItems
+        }
+    }).populate({
+        path: 'approvedBy',
+        select: 'email profile'
+    })
+    .populate('reviewCount');
     if (!course) {
         res.status(404);
         throw new Error('Course not found');
@@ -187,7 +198,7 @@ export const createCourse = asyncHandler(async (req, res, next) => {
 // @route     PUT /api/v1/courses/:id
 // @access    Private
 export const updateCourse = asyncHandler(async (req, res, next) => {
-    let course = await Course.findOne({ courseId: { $regex: new RegExp(`^${req.params.id}$`, 'i') } });
+    let course = await Course.findById(req.params.id);
 
     if (!course) {
         return next(new ErrorResponse(`Course not found with id of ${req.params.id} err `, 404));
@@ -208,7 +219,9 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
         delete courseData.modules; // Xóa modules khỏi courseData để tránh cập nhật trực tiếp
 
         course = await Course.findOneAndUpdate(
-            { courseId: { $regex: new RegExp(`^${req.params.id}$`, 'i') } },
+            { _id: req.params.id }, // Tìm course theo id
+            courseData, // Dữ liệu mới để cập nhật course
+
             courseData,
             {
                 new: true,

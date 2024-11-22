@@ -442,7 +442,6 @@ export const forgotPasswordCtrl = asyncHandler(async (req, res, next) => {
     if (!user) {
         return next(new ErrorResponse('There is no user with that email', 404));
     }
-
     // Tạo token chứa 10 ký tự ngẫu nhiên
     const resetToken = Math.floor(100000 + Math.random() * 900000);
     const resetExpire = Date.now() + 10 * 60 * 1000;

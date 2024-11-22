@@ -42,10 +42,12 @@ import {
     createModuleItemProgramming,
     getModuleItemById,
 } from "../controllers/moduleItemController.js";
+import { enrollCourse } from "../controllers/userActionController.js";
 
 import { protect, authorize } from "../middlewares/auth.js";
 
 import upload from "../middlewares/upload.js";
+import { isLoggedin } from "../middlewares/isLoggedin.js";
 
 
 const router = express.Router();
@@ -57,8 +59,12 @@ router.route('/')
 router.route('/getCourseByInstructor').get(protect, authorize('instructor', 'admin'), getCourseByInstructor);
 // Route cho khóa học cụ thể
 router.route('/:id')
-    .get(getCourseByCourseId)
+    .get(protect,getCourseById)
     .put(protect, authorize('instructor', 'admin'), updateCourse) //protect, authorize('instructor', 'admin'),
+
+router.route('/enroll/:courseId').post(protect, authorize('student'), enrollCourse); // protect, authorize('student'),
+
+
 
 //.delete(protect, authorize('instructor', 'admin'), deleteCourse); // protect, authorize('instructor', 'admin'),
 
@@ -133,6 +139,6 @@ router.route('/moduleitem/:moduleItemId')
 // router.route('/:id/modules/:moduleId/lessons/:lessonId')
 //     .get(protect, getModuleItem)
 
-// router.route('/modules/:id').get(isLoggedin, getModuleById);
+
 
 export default router;
