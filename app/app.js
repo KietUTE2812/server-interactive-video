@@ -23,6 +23,8 @@ import roadmapRoute from "../routes/roadmapRoute.js";
 import moduleRoute from "../routes/moduleRoute.js";
 // import chunkUpload from "../routes/ChunkUpload.js";
 import notificationRoute from "../routes/notificationRoute.js";
+import videoRoute from "../routes/videoRoute.js";
+import progressRoute from "../routes/progressRoute.js";
 
 // // Use environment variables for Redis connection
 // const redisHost = process.env.REDIS_HOST || 'localhost';
@@ -96,7 +98,9 @@ app.use('/api/v1/quizzes', quizRoute)
 app.use('/api/v1/roadmap', roadmapRoute)
 app.use('/api/v1/modules', moduleRoute)
 // app.use('/api/v1/uploads', chunkUpload)
+app.use('/api/v1/videos', videoRoute)
 app.use('/api/v1/notifications', notificationRoute)
+app.use('/api/v1/progress', progressRoute)
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {
   console.error(err.stack);

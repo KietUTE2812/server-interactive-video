@@ -87,6 +87,7 @@ export const getModuleById = asyncHandler(async (req, res, next) => {
                 moduleItems: moduleItemsWithProgress,
                 completionPercentage
             },
+            progress: userProgress
         }
     });
 });
