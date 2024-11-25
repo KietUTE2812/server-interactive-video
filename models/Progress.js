@@ -47,8 +47,14 @@ const ModuleItemProgressSchema = new Schema({
                     type: mongoose.Schema.Types.ObjectId,
                     ref: 'Question'
                 },
+                type: {
+                    type: String,
+                    enum: ['only-choice', 'multiple-choice', 'true-false']
+                },
                 explanation: String,
-                selectedAnswer: String,
+                selectedAnswer: {
+                    type: mongoose.Schema.Types.Mixed,
+                },
                 isCorrect: Boolean,
                 timeSpent: Number
             }]
@@ -70,14 +76,11 @@ const ModuleItemProgressSchema = new Schema({
         },
         // Cho Reading
         reading: {
-            pagesRead: Number,
-            totalPages: Number,
-            lastReadPage: Number,
-            bookmarks: [{
-                page: Number,
-                note: String,
-                createdAt: Date
-            }]
+            status: {
+                type: String,
+                enum: ['not-started', 'in-progress', 'completed'],
+                default: 'not-started'
+            }
         },
         // Cho Video
         video: {

@@ -59,7 +59,7 @@ router.route('/')
 router.route('/getCourseByInstructor').get(protect, authorize('instructor', 'admin'), getCourseByInstructor);
 // Route cho khóa học cụ thể
 router.route('/:id')
-    .get(protect,getCourseById)
+    .get(isLoggedin ,getCourseById)
     .put(protect, authorize('instructor', 'admin'), updateCourse) //protect, authorize('instructor', 'admin'),
 
 router.route('/enroll/:courseId').post(protect, authorize('student'), enrollCourse); // protect, authorize('student'),

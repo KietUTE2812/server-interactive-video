@@ -4,13 +4,27 @@ import asyncHandler from "../middlewares/asyncHandler.js";
 import ErrorResponse from "../utils/ErrorResponse.js";
 import User from '../models/User.js';
 import mongoose from "mongoose";
+import { filter } from "async";
 // @desc      Get all courses
 // @route     GET /api/v1/courses
 // @access    Public
 export const getCourses = asyncHandler(async (req, res, next) => {
-    let { limit , page = 1 } = req.query;
+    let { limit , page = 1, ...filter } = req.query;
+    if(filter.tags && Array.isArray(filter.tags)) {
+        filter.tags = { $in: filter.tags };
+    }
+    if(filter.title && filter.title.length > 0) {
+         filter.title = { $regex: filter.title, $options: 'i' }
+
+    }
+    if(filter.instructor && filter.instructor.length > 0) {
+        filter.instructor = { $regex: filter.instructor, $options: 'i' }
+    }
+    if(filter.level) {
+        filter.level = { $regex: filter.level, $options: 'i' }
+    }
     const count = await Course.countDocuments({status: 'published'});
-    const courses = await Course.find()
+    const courses = await Course.find(filter)
         .populate({
             path: 'instructor',
             select: 'email profile.fullName'
@@ -29,7 +43,6 @@ export const getCourses = asyncHandler(async (req, res, next) => {
         })
         .populate('reviewCount').sort('createdAt').limit(page*limit > count ? count - (page-1)*limit : limit).skip((page - 1) * limit);
     
-    console.log('Courses:', courses);
     res.status(200).json({ success: true, page: parseInt(page),
         limit: parseInt(limit), count, data: courses });
 });

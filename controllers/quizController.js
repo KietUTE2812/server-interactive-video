@@ -96,18 +96,30 @@ const calculateQuizScore = (questions, answers, timeSpent) => {
     let wrongAnswers = 0;
     let totalPoints = 0;
     let earnedPoints = 0;
-
+    console.log(answers );
     const processedAnswers = questions.map((question, index) => {
         const userAnswer = answers[index];
-        const correctAnswer = question.answers.find(a => a.isCorrect);
-
+        let correctAnswer = question.answers.find(a => a.isCorrect === true);
+        if (question.type === 'multiple-choice') 
+            correctAnswer = question.answers.filter(a => a.isCorrect === true);
+        console.log(question.type ,correctAnswer);
         totalPoints += question.points;
         let isCorrect = false;
 
         if (question.type === 'only-choice') {
             isCorrect = userAnswer === correctAnswer._id.toString();
         } else if (question.type === 'multiple-choice') {
-            isCorrect = correctAnswer._id.every(id => userAnswer.includes(id.toString()));
+            isCorrect = userAnswer.length === correctAnswer.length;
+            if (isCorrect) {
+                for (let i = 0; i < userAnswer.length; i++) {
+                    if (!correctAnswer.some(a => a._id.toString() === userAnswer[i])) {
+                        isCorrect = false;
+                        break;
+                    }
+                }
+            }
+        } else if (question.type === 'true-false') {
+            isCorrect = userAnswer === correctAnswer._id.toString();
         }
 
         if (isCorrect) {
