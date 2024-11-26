@@ -48,7 +48,7 @@ export const getModulesByCourseId = asyncHandler(async (req, res, next) => {
 
 export const getModuleById = asyncHandler(async (req, res, next) => {
     const moduleId = req.params.id;
-    console.log('Module ID:', moduleId);
+    //console.log('Module ID:', moduleId);
     // Lấy module và populate moduleItems
     const module = await Module.findById(moduleId).populate('moduleItems');
     if (!module) {
@@ -101,7 +101,7 @@ export const getModuleById = asyncHandler(async (req, res, next) => {
 export const createModule = asyncHandler(async (req, res, next) => {
     const { id } = req.params;
     // 1. Tìm course bằng courseId (string)
-    const course = await Course.findOne({ courseId: id });
+    const course = await Course.findById(id);
     if (!course) {
         return next(new ErrorResponse(`Not found course with id ${id}`, 404));
     }
@@ -162,13 +162,13 @@ export const updateModule = asyncHandler(async (req, res, next) => {
     const { moduleId } = req.params;
 
     // Find the course
-    const course = await Course.findOne({ courseId: courseId });
+    const course = await Course.findById(id);
     if (!course) {
         return next(new ErrorResponse(`No found course with id ${courseId}`, 404));
     }
 
     // Find all modules for the course
-    const modules = await Module.find({ courseId: course._id }).populate('moduleItems');
+    const modules = await Module.find({ courseId: courseId }).populate('moduleItems');
     let moduleToUpdate = modules.find(module => module.index === moduleId);
 
     if (!moduleToUpdate) {
@@ -204,7 +204,7 @@ export const deleteModule = asyncHandler(async (req, res, next) => {
     const courseId = req.params.id;
     const moduleId = req.params.moduleId;
     // Find course
-    const course = await Course.findOne({ courseId: courseId });
+    const course = await Course.findById(id);
     if (!course) {
         return next(new ErrorResponse(`No course found with id ${courseId}`, 404));
     }
@@ -263,7 +263,7 @@ export const deleteModule = asyncHandler(async (req, res, next) => {
 
 export const getAllModuleByModuleItemId = asyncHandler(async (req, res, next) => {
     const { itemId } = req.params;
-    console.log('Module item ID:', itemId);
+    //console.log('Module item ID:', itemId);
 
     try {
         // Find the module item first
