@@ -85,7 +85,7 @@ const ProgramProblemSchema = new Schema({
     content: {
         type: String,
         required: true,
-        maxlength: [5000, 'Description cannot be more than 5000 characters']
+        //maxlength: [5000, 'Description cannot be more than 5000 characters']
     },
     difficulty: {
         type: String,

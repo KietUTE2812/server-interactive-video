@@ -30,7 +30,7 @@ export const createModuleItemSupplement = asyncHandler(async (req, res, next) =>
     }
 
     // Find the course
-    const course = await Course.findOne({ courseId: courseId });
+    const course = await Course.findById(courseId);
     if (!course) {
         return next(new ErrorResponse(`No found course with id ${courseId}`, 404));
     }
@@ -145,7 +145,7 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
                 writeConcern: { w: 'majority' }
             });
 
-            const course = await Course.findOne({ courseId: courseId }).session(session);
+            const course = await Course.findById(courseId).session(session);
 
             if (!course) {
                 await session.abortTransaction();
@@ -272,7 +272,7 @@ export const createModuleItemQuiz = asyncHandler(async (req, res, next) => {
     const moduleId = req.params.moduleId;
 
     // Find the course
-    const course = await Course.findOne({ courseId: courseId });
+    const course = await Course.findById(courseId);
     if (!course) {
         return next(new ErrorResponse(`No found course with id ${courseId}`, 404));
     }
@@ -355,7 +355,7 @@ export const createModuleItemProgramming = asyncHandler(async (req, res, next) =
     const moduleId = req.params.moduleId;
 
     // Find the course
-    const course = await Course.findOne({ courseId: courseId });
+    const course = await Course.findById(courseId);
     if (!course) {
         return next(new ErrorResponse(`No found course with id ${courseId}`, 404));
     }
@@ -370,8 +370,8 @@ export const createModuleItemProgramming = asyncHandler(async (req, res, next) =
         ...req.body,
         module: module._id
     }
-    console.log("user", req.user.id)
-    console.log('formData', formData);
+    //console.log("user", req.user.id)
+    //console.log('formData', formData);
     // Check authorization
     if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
         return next(new ErrorResponse(`User is not authorized to create module item`, 401));
