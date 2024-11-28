@@ -352,7 +352,7 @@ const loginUserCtrl = asyncHandler(async (req, res, next) => {
 const getUserProfileCtrl = asyncHandler(async (req, res) => {
     const _id = req.params.userid;
 
-    const user = await User.findById(_id).select('-password -refreshToken');
+    const user = await User.findById(_id).select('-password -refreshToken').populate('enrolled_courses');
     if (user) {
         res.json({
             status: "success",

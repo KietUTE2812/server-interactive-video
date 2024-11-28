@@ -5,25 +5,44 @@ import ErrorResponse from "../utils/ErrorResponse.js";
 import User from '../models/User.js';
 import mongoose from "mongoose";
 import { filter } from "async";
-// @desc      Get all courses
-// @route     GET /api/v1/courses
-// @access    Public
 export const getCourses = asyncHandler(async (req, res, next) => {
-    let { limit , page = 1, ...filter } = req.query;
-    if(filter.tags && Array.isArray(filter.tags)) {
-        filter.tags = { $in: filter.tags };
-    }
-    if(filter.title && filter.title.length > 0) {
-         filter.title = { $regex: filter.title, $options: 'i' }
+    let { search, userId, limit, page = 1, ...otherFilters } = req.query;
+    
+    // Khởi tạo object filter cơ bản
+    let filter = { status: 'published', ...otherFilters };
+    
+    // Nếu có tham số search, tạo điều kiện tìm kiếm đa trường
+    if (search) {
+        filter = {
+            ...filter,
+            $or: [
+                { title: { $regex: search, $options: 'i' } },
+                { tags: { $in: [new RegExp(search, 'i')] } },
+                { level: { $regex: search, $options: 'i' } }
+            ]
+        };
 
+        // Thêm tìm kiếm theo instructor
+        const instructors = await User.find({
+            $or: [
+                { 'profile.fullName': { $regex: search, $options: 'i' } },
+            ]
+        }).select('_id');
+        
+        if (instructors.length > 0) {
+            filter.$or.push({ instructor: { $in: instructors.map(i => i._id) } });
+        }
     }
-    if(filter.instructor && filter.instructor.length > 0) {
-        filter.instructor = { $regex: filter.instructor, $options: 'i' }
+
+    // Xử lý các filter khác nếu có
+    if (otherFilters.tags && Array.isArray(otherFilters.tags)) {
+        filter.tags = { $in: otherFilters.tags };
     }
-    if(filter.level) {
-        filter.level = { $regex: filter.level, $options: 'i' }
-    }
-    const count = await Course.countDocuments({status: 'published'});
+
+    // Đếm tổng số document thỏa mãn điều kiện
+    const count = await Course.countDocuments(filter);
+
+    // Thực hiện query với populate
     const courses = await Course.find(filter)
         .populate({
             path: 'instructor',
@@ -33,18 +52,26 @@ export const getCourses = asyncHandler(async (req, res, next) => {
             path: 'modules',
             select: 'index title moduleItems description',
             populate: {
-                path: 'moduleItems', // Populate thêm thông tin của moduleItems
-                select: 'title content type' // Chọn các trường cần thiết của moduleItems
+                path: 'moduleItems',
+                select: 'title content type'
             }
         })
         .populate({
             path: 'approvedBy',
             select: 'email profile.fullName'
         })
-        .populate('reviewCount').sort('createdAt').limit(page*limit > count ? count - (page-1)*limit : limit).skip((page - 1) * limit);
-    
-    res.status(200).json({ success: true, page: parseInt(page),
-        limit: parseInt(limit), count, data: courses });
+        .populate('reviewCount')
+        .sort('createdAt')
+        .limit(page * limit > count ? count - (page - 1) * limit : limit)
+        .skip((page - 1) * limit);
+
+    res.status(200).json({
+        success: true,
+        page: parseInt(page),
+        limit: parseInt(limit),
+        count,
+        data: courses
+    });
 });
 
 // @desc      Get single course
