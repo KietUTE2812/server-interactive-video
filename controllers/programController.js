@@ -52,13 +52,21 @@ export const compile = asyncHandler(async (req, res, next) => {
     });
 
     console.log("API Response:", response.data);
-
-    res.json({
-        output: response.data.run.output,
-        stderr: response.data.run.stderr,
-        stdout: response.data.run.stdout,
-        exitCode: response.data.run.code
+    res.status(200).json({
+        success: true,
+        data: {
+            output: response.data.run.output,
+            stderr: response.data.run.stderr,
+            stdout: response.data.run.stdout,
+            exitCode: response.data.run.code
+        }
     });
+    // res.json({
+    //     output: response.data.run.output,
+    //     stderr: response.data.run.stderr,
+    //     stdout: response.data.run.stdout,
+    //     exitCode: response.data.run.code
+    // });
 });
 
 // @desc    Get all programming problems
@@ -73,7 +81,8 @@ export const getProblems = asyncHandler(async (req, res, next) => {
 // @route   GET /api/problems/:id
 // @access  Public
 export const getProblem = asyncHandler(async (req, res, next) => {
-    const problem = await ProgrammingProblem.findById(req.params.id).select('-submissions -testcases');
+    const problem = await ProgramProblem.findById(req.params.id)
+        .populate('testcases');
 
     if (!problem) {
         return next(new ErrorResponse(`Problem not found with id of ${req.params.id}`, 404));
@@ -196,6 +205,15 @@ export const getSubmission = asyncHandler(async (req, res, next) => {
 
     res.status(200).json({ success: true, data: submission });
 });
+
+// export const getProblemById = asyncHandler(async (req, res, next) => {
+//     const problemId = req.params.id;
+//     const problem = await ProgramProblem.findById(problemId);
+//     if (!problem) {
+//         return next(new ErrorResponse(`Problem not found with id of ${problemId}`, 404));
+//     }
+//     res.status(200).json({ success: true, data: problem });
+// })
 
 
 
