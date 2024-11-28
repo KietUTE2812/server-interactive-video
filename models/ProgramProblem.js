@@ -8,6 +8,11 @@ const SubmissionSchema = new Schema({
         ref: 'ProgrammingProblem',
         unique: false,
     },
+    userId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: false,
+    },
     status: {
         type: String,
         enum: ['Accepted', 'Wrong Answer', 'Time Limit Exceeded', 'Runtime Error', 'Compilation Error'],
