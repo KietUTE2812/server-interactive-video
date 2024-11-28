@@ -17,7 +17,7 @@ export const compile = asyncHandler(async (req, res, next) => {
     const codeDe = `${input || ''}
 ${code}`.trim();
 
-    console.log("Combined Code:", codeDe);
+    // console.log("Combined Code:", codeDe, code);
     console.log("Received request:", req.body);
 
     // Bản đồ ngôn ngữ và phiên bản
