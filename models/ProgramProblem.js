@@ -102,6 +102,10 @@ const ProgramProblemSchema = new Schema({
     inputFormat: {
         type: String
     },
+    codeFormat: [{
+        language: String,
+        code: String
+    }],
     outputFormat: {
         type: String
     },
