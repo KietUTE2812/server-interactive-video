@@ -20,6 +20,10 @@ router.route('/')
     .get(getProblems)
     .post(protect, authorize('admin', 'instructor'), createProblem);
 
+router.route('/runcode/:id')
+    .post(protect, authorize('admin', 'instructor', 'student'), compile)
+
+
 router.route('/:id')
     .get(getProblem)
     .put(protect, authorize('admin', 'instructor'), updateProblem)
