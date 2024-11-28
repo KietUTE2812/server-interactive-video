@@ -23,6 +23,8 @@ router.route('/')
 router.route('/runcode/:id')
     .post(protect, authorize('admin', 'instructor', 'student'), compile)
 
+router.route('/submitcode/:id')
+    .post(protect, authorize('admin', 'instructor', 'student'), submitSolution)
 
 router.route('/:id')
     .get(getProblem)

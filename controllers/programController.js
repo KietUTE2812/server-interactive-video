@@ -2,6 +2,7 @@ import axios from 'axios';
 import ProgramProblem from '../models/ProgramProblem.js';
 import asyncHandler from "../middlewares/asyncHandler.js";
 import ErrorResponse from "../utils/ErrorResponse.js";
+import { asyncHandler } from 'express-async-handler';
 
 // @desc      Compile code
 // @route     POST /api/v1/program/compile
@@ -176,6 +177,84 @@ export const submitSolution = asyncHandler(async (req, res, next) => {
         success: true,
         data: submission
     });
+});
+
+export const submissionCode = asyncHandler(async (req, res, next) => {
+    const { code, language, testcases } = req.body;
+    if (!code || !language || !testcases.length) {
+        return next(new ErrorResponse("Missing data", 400));
+    }
+    const languageMap = {
+        "c": { language: "c", version: "10.2.0" },
+        "cpp": { language: "cpp", version: "10.2.0" },
+        "python": { language: "python", version: "3.10.0" },
+        "java": { language: "java", version: "15.0.2" },
+        "javascript": { language: "javascript", version: "18.15.0" }
+    };
+
+    // Kiểm tra ngôn ngữ có hỗ trợ không
+    if (!languageMap[language.toLowerCase()]) {
+        return next(new ErrorResponse("Unsupported language", 400));
+    }
+
+    // Lấy thông tin ngôn ngữ và phiên bản từ languageMap
+    const { language: lang, version } = languageMap[language.toLowerCase()];
+
+    const results = [];
+    const data = {
+        language: lang,
+        version: version,
+        files: [
+            {
+                name: `main.${language === 'python' ? 'py' : language}`,
+                content: code
+            }
+        ],
+        stdin: ""
+    };
+
+    for (const testcase of testcases) {
+        // Thêm input của testcase vào stdin
+        data.stdin = testcase.input;
+
+        try {
+            // Gọi API thực thi code
+            const response = await axios.post('https://emkc.org/api/v2/piston/execute', data, {
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            // Kiểm tra kết quả thực thi
+            const executionResult = response.data.run.output.trim();
+            const isPassed = executionResult === testcase.expectedOutput;
+
+            results.push({
+                testcaseId: testcase._id,
+                input: testcase.input,
+                expectedOutput: testcase.expectedOutput,
+                actualOutput: executionResult,
+                passed: isPassed,
+                executeTime: response.data.run.real_time || 0
+            });
+        } catch (error) {
+            results.push({
+                testcaseId: testcase._id,
+                input: testcase.input,
+                error: error.message,
+                passed: false
+            });
+        }
+    }
+
+    // Tính toán tỷ lệ testcase pass
+    const passedTestcases = results.filter(result => result.passed).length;
+    const totalTestcases = results.length;
+
+    res.status(200).json({
+        results,
+        passRate: (passedTestcases / totalTestcases) * 100,
+        allPassed: passedTestcases === totalTestcases
+    });
+
 });
 
 //@desc Get All Submissions
