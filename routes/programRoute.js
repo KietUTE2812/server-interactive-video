@@ -26,6 +26,7 @@ router.route('/runcode/:id')
 
 router.route('/submitcode/:id')
     .post(protect, authorize('admin', 'instructor', 'student'), submissionCode)
+    .get(protect, authorize('admin', 'instructor', 'student'), getSubmission)
 
 router.route('/:id')
     .get(getProblem)
