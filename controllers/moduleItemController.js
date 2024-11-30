@@ -408,6 +408,7 @@ export const createModuleItemProgramming = asyncHandler(async (req, res, next) =
                 baseScore: formData.baseScore,
                 timeBonus: formData.timeBonus,
                 memoryBonus: formData.memoryBonus,
+                codeFormat: formData.codeFormat
             }
         )
 

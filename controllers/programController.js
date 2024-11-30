@@ -2,24 +2,25 @@ import axios from 'axios';
 import ProgramProblem from '../models/ProgramProblem.js';
 import asyncHandler from "../middlewares/asyncHandler.js";
 import ErrorResponse from "../utils/ErrorResponse.js";
-import { asyncHandler } from 'express-async-handler';
+import convertCode from './convertCode.js';
+
 
 // @desc      Compile code
 // @route     POST /api/v1/program/compile
 // @access    Public
 export const compile = asyncHandler(async (req, res, next) => {
-    const { code, language, input } = req.body;
+    const { code, language, input, codeExecute } = req.body;
 
     // Kiểm tra thiếu code hoặc ngôn ngữ
     if (!code || !language) {
         return next(new ErrorResponse("Missing code or language", 400));
     }
 
-    const codeDe = `${input || ''}
-${code}`.trim();
+    const codeDe = convertCode(code, input, language, codeExecute);
+    console.log("Converted Code:", codeDe);
 
     // console.log("Combined Code:", codeDe, code);
-    console.log("Received request:", req.body);
+    //console.log("Received request:", req.body);
 
     // Bản đồ ngôn ngữ và phiên bản
     const languageMap = {
@@ -50,6 +51,7 @@ ${code}`.trim();
         ],
         stdin: ""
     };
+    console.log("Data to send:", data);
 
     // Gọi API và trả về kết quả
     const response = await axios.post('https://emkc.org/api/v2/piston/execute', data, {
@@ -180,7 +182,7 @@ export const submitSolution = asyncHandler(async (req, res, next) => {
 });
 
 export const submissionCode = asyncHandler(async (req, res, next) => {
-    const { code, language, testcases } = req.body;
+    const { code, language, testcases, codeExecute } = req.body;
     if (!code || !language || !testcases.length) {
         return next(new ErrorResponse("Missing data", 400));
     }
@@ -201,22 +203,26 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
     const { language: lang, version } = languageMap[language.toLowerCase()];
 
     const results = [];
-    const data = {
-        language: lang,
-        version: version,
-        files: [
-            {
-                name: `main.${language === 'python' ? 'py' : language}`,
-                content: code
-            }
-        ],
-        stdin: ""
-    };
+    const tc = [];
+
+    // console.log("Received request:", req.body);
+    // console.log("code:", code);
 
     for (const testcase of testcases) {
+        // console.log("input:", testcase.input);
         // Thêm input của testcase vào stdin
-        data.stdin = testcase.input;
-
+        const codeDe = convertCode(code, testcase.input, language, codeExecute);
+        const data = {
+            language: lang,
+            version: version,
+            files: [
+                {
+                    name: `main.${language === 'python' ? 'py' : language}`,
+                    content: codeDe
+                }
+            ],
+            stdin: ""
+        };
         try {
             // Gọi API thực thi code
             const response = await axios.post('https://emkc.org/api/v2/piston/execute', data, {
@@ -226,7 +232,16 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
             // Kiểm tra kết quả thực thi
             const executionResult = response.data.run.output.trim();
             const isPassed = executionResult === testcase.expectedOutput;
-
+            tc.push(
+                {
+                    input: testcase.input,
+                    expectedOutput: testcase.expectedOutput,
+                    actualOutput: executionResult,
+                    passed: isPassed,
+                    executeTime: response.data.run.real_time || 0,
+                    executeTimeLimit: testcase.executeTimeLimit
+                }
+            )
             results.push({
                 testcaseId: testcase._id,
                 input: testcase.input,
@@ -250,9 +265,12 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
     const totalTestcases = results.length;
 
     res.status(200).json({
-        results,
-        passRate: (passedTestcases / totalTestcases) * 100,
-        allPassed: passedTestcases === totalTestcases
+        data: {
+            results: results,
+            passRate: (passedTestcases / totalTestcases) * 100,
+            allPassed: passedTestcases === totalTestcases
+        },
+        testcases: tc,
     });
 
 });

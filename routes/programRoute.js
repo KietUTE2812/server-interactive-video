@@ -8,7 +8,8 @@ import {
     createProblem,
     updateProblem,
     deleteProblem,
-    compile
+    compile,
+    submissionCode
 } from "../controllers/programController.js";
 import { protect, authorize } from "../middlewares/auth.js";
 const router = express.Router();
@@ -24,7 +25,7 @@ router.route('/runcode/:id')
     .post(protect, authorize('admin', 'instructor', 'student'), compile)
 
 router.route('/submitcode/:id')
-    .post(protect, authorize('admin', 'instructor', 'student'), submitSolution)
+    .post(protect, authorize('admin', 'instructor', 'student'), submissionCode)
 
 router.route('/:id')
     .get(getProblem)
