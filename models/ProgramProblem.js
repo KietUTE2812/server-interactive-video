@@ -109,7 +109,8 @@ const ProgramProblemSchema = new Schema({
     },
     codeFormat: [{
         language: String,
-        code: String
+        codeDefault: String,
+        codeExecute: String,
     }],
     outputFormat: {
         type: String
