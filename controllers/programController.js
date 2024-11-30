@@ -3,6 +3,8 @@ import ProgramProblem from '../models/ProgramProblem.js';
 import asyncHandler from "../middlewares/asyncHandler.js";
 import ErrorResponse from "../utils/ErrorResponse.js";
 import convertCode from './convertCode.js';
+import Submission from '../models/Submission.js';
+import mongoose from 'mongoose';
 
 
 // @desc      Compile code
@@ -80,7 +82,7 @@ export const compile = asyncHandler(async (req, res, next) => {
 // @route   GET /api/problems
 // @access  Public
 export const getProblems = asyncHandler(async (req, res, next) => {
-    const problems = await ProgrammingProblem.find().select('-submissions -testcases');
+    const problems = await ProgramProblem.find().select('-submissions -testcases');
     res.status(200).json({ success: true, count: problems.length, data: problems });
 });
 
@@ -105,7 +107,7 @@ export const createProblem = asyncHandler(async (req, res, next) => {
     // Add user to req.body
     req.body.createdBy = req.user.id;
 
-    const problem = await ProgrammingProblem.create(req.body);
+    const problem = await ProgramProblem.create(req.body);
 
     res.status(201).json({
         success: true,
@@ -117,7 +119,7 @@ export const createProblem = asyncHandler(async (req, res, next) => {
 // @route   PUT /api/problems/:id
 // @access  Private (Admin only)
 export const updateProblem = asyncHandler(async (req, res, next) => {
-    let problem = await ProgrammingProblem.findById(req.params.id);
+    let problem = await ProgramProblem.findById(req.params.id);
 
     if (!problem) {
         return next(new ErrorResponse(`Problem not found with id of ${req.params.id}`, 404));
@@ -128,7 +130,7 @@ export const updateProblem = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`User ${req.user.id} is not authorized to update this problem`, 401));
     }
 
-    problem = await ProgrammingProblem.findByIdAndUpdate(req.params.id, req.body, {
+    problem = await ProgramProblem.findByIdAndUpdate(req.params.id, req.body, {
         new: true,
         runValidators: true
     });
@@ -140,7 +142,7 @@ export const updateProblem = asyncHandler(async (req, res, next) => {
 // @route   DELETE /api/problems/:id
 // @access  Private (Admin only)
 export const deleteProblem = asyncHandler(async (req, res, next) => {
-    const problem = await ProgrammingProblem.findById(req.params.id);
+    const problem = await ProgramProblem.findById(req.params.id);
 
     if (!problem) {
         return next(new ErrorResponse(`Problem not found with id of ${req.params.id}`, 404));
@@ -203,7 +205,39 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
     const { language: lang, version } = languageMap[language.toLowerCase()];
 
     const results = [];
-    const tc = [];
+    const testcaseResults = [];
+    let fileSize = null;
+    const testcaseStatuses = [];
+
+    // Hàm xác định status tổng thể cho submission
+    const determineOverallSubmissionStatus = (results, apiErrors) => {
+        const passedTestcases = results.filter(result => result.passed).length;
+        const totalTestcases = results.length;
+
+        // Kiểm tra lỗi từ API trước
+        if (apiErrors.compilationError) {
+            return 'Compilation Error';
+        }
+
+        if (apiErrors.runtimeError) {
+            return 'Runtime Error';
+        }
+
+        // Kiểm tra kết quả test case
+        if (passedTestcases === totalTestcases) {
+            return 'Accepted';
+        } else if (passedTestcases > 0) {
+            return 'Partially Accepted';
+        } else {
+            return 'Wrong Answer';
+        }
+    };
+
+    // Theo dõi các lỗi từ API
+    const apiErrors = {
+        compilationError: false,
+        runtimeError: false
+    };
 
     // console.log("Received request:", req.body);
     // console.log("code:", code);
@@ -212,6 +246,7 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
         // console.log("input:", testcase.input);
         // Thêm input của testcase vào stdin
         const codeDe = convertCode(code, testcase.input, language, codeExecute);
+        fileSize = getFileSize(codeDe);
         const data = {
             language: lang,
             version: version,
@@ -228,20 +263,25 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
             const response = await axios.post('https://emkc.org/api/v2/piston/execute', data, {
                 headers: { 'Content-Type': 'application/json' }
             });
+            console.log("API Response:", response.data);
 
             // Kiểm tra kết quả thực thi
             const executionResult = response.data.run.output.trim();
             const isPassed = executionResult === testcase.expectedOutput;
-            tc.push(
-                {
-                    input: testcase.input,
-                    expectedOutput: testcase.expectedOutput,
-                    actualOutput: executionResult,
-                    passed: isPassed,
-                    executeTime: response.data.run.real_time || 0,
-                    executeTimeLimit: testcase.executeTimeLimit
-                }
-            )
+
+            if (response.data.run.stderr && !response.data.run.output) {
+                apiErrors.compilationError = true;
+            }
+
+            testcaseResults.push({
+                input: testcase.input,
+                expectedOutput: testcase.expectedOutput,
+                actualOutput: executionResult,
+                passed: isPassed,
+                executeTime: response.data.run.real_time || 0,
+                executeTimeLimit: testcase.executeTimeLimit
+            });
+
             results.push({
                 testcaseId: testcase._id,
                 input: testcase.input,
@@ -250,7 +290,10 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
                 passed: isPassed,
                 executeTime: response.data.run.real_time || 0
             });
+
         } catch (error) {
+            apiErrors.runtimeError = true;
+
             results.push({
                 testcaseId: testcase._id,
                 input: testcase.input,
@@ -260,25 +303,50 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
         }
     }
 
+
     // Tính toán tỷ lệ testcase pass
     const passedTestcases = results.filter(result => result.passed).length;
     const totalTestcases = results.length;
+    const passRate = (passedTestcases / totalTestcases) * 100;
 
-    res.status(200).json({
-        data: {
-            results: results,
-            passRate: (passedTestcases / totalTestcases) * 100,
-            allPassed: passedTestcases === totalTestcases
-        },
-        testcases: tc,
-    });
+
+    const overallSubmissionStatus = determineOverallSubmissionStatus(results, apiErrors);
+
+    const submission = {
+        problemId: req.params.id,
+        userId: req.user.id,
+        status: overallSubmissionStatus,
+        language: language,
+        src: code,
+        score: passRate,
+        runtime: '',
+        memory: fileSize
+    };
+
+    console.log("submission: ", submission);
+    try {
+        const newSubmission = await Submission.create(submission);
+        res.status(200).json({
+            data: {
+                results: results,
+                passRate: passRate,
+                allPassed: passedTestcases === totalTestcases
+            },
+            testcases: testcaseResults,
+            submission: newSubmission,
+        });
+    }
+    catch (e) {
+        return next(new ErrorResponse(e.message, 400));
+    }
+
 
 });
 
 //@desc Get All Submissions
 //@route GET /api/v1/problems/:id/submissions
 //@access Private
-export const getSubmissions = asyncHandler(async (req, res) => {
+export const getSubmissions = asyncHandler(async (req, res, next) => {
     const problem = await ProgramProblem.findById(req.params.id);
 
     if (!problem) {
@@ -292,19 +360,54 @@ export const getSubmissions = asyncHandler(async (req, res) => {
 // @route   GET /api/problems/:id/submissions/:submissionId
 // @access  Private
 export const getSubmission = asyncHandler(async (req, res, next) => {
-    const problem = await ProgramProblem.findById(req.params.id);
+    const { id } = req.params;
+    const userId = req.user.id;
 
+    // Kiểm tra tính hợp lệ của problemId và userId
+    if (!mongoose.Types.ObjectId.isValid(id) ||
+        !mongoose.Types.ObjectId.isValid(userId)) {
+        return next(new ErrorResponse('Invalid Problem or User ID', 400));
+    }
+    const problem = await ProgramProblem.findById(id);
     if (!problem) {
-        return next(new ErrorResponse(`Problem not found with id of ${req.params.id}`, 404));
+        return next(new ErrorResponse('Problem not found', 404));
     }
 
-    const submission = problem.submissions.find(sub => sub._id.toString() === req.params.submissionId);
+    // Tìm kiếm tất cả submissions cho problem và user cụ thể
+    const submissions = await Submission.find({
+        problemId: id,
+        userId: userId
+    })
+        .sort({ createdAt: -1 }) // Sắp xếp từ mới nhất đến cũ nhất
+        .populate({
+            path: 'problemId',
+            select: 'title difficulty' // Chọn các trường cần thiết của problem
+        });
 
-    if (!submission) {
-        return next(new ErrorResponse(`Submission not found with id of ${req.params.submissionId}`, 404));
+    // Nếu không tìm thấy submissions
+    if (!submissions || submissions.length === 0) {
+        return next(new ErrorResponse('No submissions found', 404));
     }
 
-    res.status(200).json({ success: true, data: submission });
+
+    // Thống kê submission
+    const submissionStats = {
+        total: submissions.length,
+        acceptedCount: submissions.filter(sub => sub.status === 'Accepted').length,
+        bestScore: Math.max(...submissions.map(sub => sub.score)),
+        statuses: submissions.reduce((acc, sub) => {
+            acc[sub.status] = (acc[sub.status] || 0) + 1;
+            return acc;
+        }, {})
+    };
+
+    res.status(200).json({
+        success: true,
+        data: {
+            submissions,
+            stats: submissionStats
+        }
+    });
 });
 
 // export const getProblemById = asyncHandler(async (req, res, next) => {
@@ -315,6 +418,14 @@ export const getSubmission = asyncHandler(async (req, res, next) => {
 //     }
 //     res.status(200).json({ success: true, data: problem });
 // })
+
+function getFileSize(content) {
+    const blob = new Blob([content], { text: 'text/plain' }).size;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    if (blob === 0) return 'n/a';
+    const i = parseInt(Math.floor(Math.log(blob) / Math.log(1024)), 10);
+    return Math.round(blob / Math.pow(1024, i), 2) + ' ' + sizes[i];
+}
 
 
 
