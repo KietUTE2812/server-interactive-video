@@ -4,9 +4,22 @@ function convertCode(code, input, language, codeExecute) {
     const params = {};
     input.split(';').forEach(param => {
         const [key, value] = param.trim().split('=').map(item => item.trim());
-        params[key] = value;
+
+        // Nhận diện và xử lý mảng
+        if (value.startsWith('[') && value.endsWith(']')) {
+            params[key] = {
+                type: 'array',
+                value: value.replace(/[\[\]]/g, '').split(',').map(v => v.trim())
+            };
+        } else {
+            params[key] = {
+                type: 'primitive',
+                value: value
+            };
+        }
     });
-    console.log("params: ", params);
+
+    //console.log("params: ", params);
 
     // Xử lý theo từng ngôn ngữ
     switch (language.toLowerCase()) {
@@ -32,13 +45,22 @@ function replaceSolution(code, codeExecute) {
 function replaceJava(code, params) {
     let modifiedCode = code;
 
-    // Thay thế các biến trong Java
-    for (const [key, value] of Object.entries(params)) {
-        // Regex để tìm khai báo biến trong Java
-        const regex = new RegExp(`(int|String|double|float|boolean|List<Integer>)?\\s*${key}\\s*=\\s*[^;]*;`);
-        modifiedCode = modifiedCode.replace(regex, (match, type) => {
-            return `${type ? type + ' ' : ''}${key} = ${value};`;
-        });
+    for (const [key, param] of Object.entries(params)) {
+        // Xử lý mảng
+        if (param.type === 'array') {
+            const formattedArray = `new int[]{${param.value.join(', ')}}`;
+
+            // Tìm và thay thế khai báo mảng với bất kỳ tên biến nào
+            const regex = new RegExp(`int\\[\\]\\s*${key}\\s*=\\s*[^;]*;`);
+            modifiedCode = modifiedCode.replace(regex, `int[] ${key} = ${formattedArray};`);
+        }
+        // Xử lý biến đơn
+        else if (param.type === 'primitive') {
+            const regex = new RegExp(`(int|String|double|float|boolean)?\\s*${key}\\s*=\\s*[^;]*;`);
+            modifiedCode = modifiedCode.replace(regex, (match, type) => {
+                return `${type ? type + ' ' : ''}${key} = ${param.value};`;
+            });
+        }
     }
 
     return modifiedCode;
@@ -48,13 +70,22 @@ function replaceJava(code, params) {
 function replaceCpp(code, params) {
     let modifiedCode = code;
 
-    // Thay thế các biến trong C++
-    for (const [key, value] of Object.entries(params)) {
-        // Regex để tìm khai báo biến trong C++
-        const regex = new RegExp(`(int|string|vector<int>)?\\s*${key}\\s*=\\s*[^;]*;`);
-        modifiedCode = modifiedCode.replace(regex, (match, type) => {
-            return `${type ? type + ' ' : ''}${key} = ${value};`;
-        });
+    for (const [key, param] of Object.entries(params)) {
+        // Xử lý mảng
+        if (param.type === 'array') {
+            const formattedArray = `{${param.value.join(', ')}}`;
+
+            // Tìm và thay thế khai báo mảng với bất kỳ tên biến nào
+            const regex = new RegExp(`(vector<int>|int\\[\\])\\s*${key}\\s*=\\s*[^;]*;`);
+            modifiedCode = modifiedCode.replace(regex, `vector<int> ${key} = ${formattedArray};`);
+        }
+        // Xử lý biến đơn
+        else if (param.type === 'primitive') {
+            const regex = new RegExp(`(int|string|vector<int>)?\\s*${key}\\s*=\\s*[^;]*;`);
+            modifiedCode = modifiedCode.replace(regex, (match, type) => {
+                return `${type ? type + ' ' : ''}${key} = ${param.value};`;
+            });
+        }
     }
 
     return modifiedCode;
@@ -64,13 +95,22 @@ function replaceCpp(code, params) {
 function replaceC(code, params) {
     let modifiedCode = code;
 
-    // Thay thế các biến trong C
-    for (const [key, value] of Object.entries(params)) {
-        // Regex để tìm khai báo biến trong C
-        const regex = new RegExp(`(int|char\\*|float|double)?\\s*${key}\\s*=\\s*[^;]*;`);
-        modifiedCode = modifiedCode.replace(regex, (match, type) => {
-            return `${type ? type + ' ' : ''}${key} = ${value};`;
-        });
+    for (const [key, param] of Object.entries(params)) {
+        // Xử lý mảng
+        if (param.type === 'array') {
+            const formattedArray = `{${param.value.join(', ')}}`;
+
+            // Tìm và thay thế khai báo mảng với bất kỳ tên biến nào
+            const regex = new RegExp(`int\\s*${key}\\[\\]\\s*=\\s*[^;]*;`);
+            modifiedCode = modifiedCode.replace(regex, `int ${key}[] = ${formattedArray};`);
+        }
+        // Xử lý biến đơn
+        else if (param.type === 'primitive') {
+            const regex = new RegExp(`(int|char\\*|float|double)?\\s*${key}\\s*=\\s*[^;]*;`);
+            modifiedCode = modifiedCode.replace(regex, (match, type) => {
+                return `${type ? type + ' ' : ''}${key} = ${param.value};`;
+            });
+        }
     }
 
     return modifiedCode;
@@ -80,16 +120,15 @@ function replaceC(code, params) {
 function replacePython(code, params) {
     let modifiedCode = code;
 
-    // Thay thế các biến trong Python
-    for (const [key, value] of Object.entries(params)) {
-        // Regex để tìm khai báo biến trong Python
+    for (const [key, param] of Object.entries(params)) {
         const regex = new RegExp(`${key}\\s*=\\s*[^\\n]*`);
         modifiedCode = modifiedCode.replace(regex, () => {
-            return `${key} = ${value}`;
+            return `${key} = ${param.type === 'array' ? param.value : param.value}`;
         });
     }
 
     return modifiedCode;
 }
+
 
 export default convertCode;

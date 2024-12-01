@@ -51,7 +51,7 @@ const AssignmentSchema = new Schema({
     },
     programmingProblem: {
         type: Schema.Types.ObjectId,
-        ref: 'ProgrammingProblem'
+        ref: 'ProgramProblem'
     }
 
 });
@@ -65,7 +65,7 @@ AssignmentSchema.methods.getScore = async function () {
         }
     } else if (this.assignmentType === 'programming') {
         await this.populate('programmingProblem', 'submissions');
-        if (this.programmingProblem) {
+        if (this.programProblem) {
             // For programming problems, we need to find the latest accepted submission
             const latestAcceptedSubmission = this.programmingProblem.submissions
                 .filter(sub => sub.status === 'Accepted')
