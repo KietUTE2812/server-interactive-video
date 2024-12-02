@@ -1,7 +1,7 @@
 ﻿import asyncHandler from "express-async-handler";
 import User from "../models/User.js";
 import ErrorResponse from "../utils/ErrorResponse.js";
-import generateRoadmap from "../utils/generateByOpenAI.js";
+import generate from "../utils/generateByOpenAI.js";
 import Roadmap from "../models/Roadmap.js";
 
 const createRoadmap = asyncHandler(async (req, res, next) => {
@@ -155,7 +155,7 @@ const Roadmap = mongoose.model('Roadmap', RoadmapSchema);
 
 module.exports = Roadmap;
         `;
-    const response = await generateRoadmap(prompt);
+    const response = await generate.generateRoadmap(prompt);
     if (!response || !response.data.title) {
         return next(new ErrorResponse('Failed to generate roadmap', 500));
     }

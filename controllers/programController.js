@@ -3,10 +3,10 @@ import ProgramProblem from '../models/ProgramProblem.js';
 import asyncHandler from "../middlewares/asyncHandler.js";
 import ErrorResponse from "../utils/ErrorResponse.js";
 import convertCode from './convertCode.js';
+import generate from '../utils/generateByOpenAI.js';
 import Submission from '../models/Submission.js';
 import mongoose from 'mongoose';
 import ModuleProgress from '../models/Progress.js';
-
 
 // @desc      Compile code
 // @route     POST /api/v1/program/compile
@@ -463,6 +463,32 @@ export const getSubmission = asyncHandler(async (req, res, next) => {
         }
     });
 });
+
+export const generateChartCode = asyncHandler(async (req, res, next) => {
+    const { code, language } = req.body;
+    if (!code || !language) {
+        return next(new ErrorResponse("Missing code or language", 400));
+    }
+    const prompt = `Generate a chart from the given code, using ${language} language
+    Required:
+    - Input: 
+        ${code}
+      - Output: There is only one code for MERMAID to visualize how the code runs. Important, A content of a node in chart must be wrap by the parentheses "". If the code does not contain data that can be visualized, return a message saying "No data to visualize".
+      - Example: 
+        graph TD;
+        A["Start"] --> B["Initialize left = 0, right = len(nums) - 1"];
+        B --> C{"left <= right?"};
+        C -- No --> D["Return left"];
+    `;
+    const response = await generate.generateChartCode(prompt);
+    if (!response || !response.data ) {
+
+        return next(new ErrorResponse('Failed to generate chart code', 500));
+    }
+    res.status(200).json({ success: true, data: response.data});
+
+})
+
 
 // export const getProblemById = asyncHandler(async (req, res, next) => {
 //     const problemId = req.params.id;
