@@ -6,6 +6,7 @@ import convertCode from './convertCode.js';
 import generate from '../utils/generateByOpenAI.js';
 import Submission from '../models/Submission.js';
 import mongoose from 'mongoose';
+import ModuleProgress from '../models/Progress.js';
 
 // @desc      Compile code
 // @route     POST /api/v1/program/compile
@@ -184,10 +185,17 @@ export const submitSolution = asyncHandler(async (req, res, next) => {
 });
 
 export const submissionCode = asyncHandler(async (req, res, next) => {
-    const { code, language, testcases, codeExecute } = req.body;
+    const { code, language, testcases, codeExecute, progressData } = req.body;
     if (!code || !language || !testcases.length) {
         return next(new ErrorResponse("Missing data", 400));
     }
+    // console.log('Received request body:', {
+    //     code: code ? 'Code received' : 'No code',
+    //     language,
+    //     testcases: testcases ? testcases.length : 'No testcases',
+    //     codeExecute,
+    //     progressData: JSON.stringify(progressData), // Log toàn bộ progressData
+    // });
     const languageMap = {
         "c": { language: "c", version: "10.2.0" },
         "cpp": { language: "cpp", version: "10.2.0" },
@@ -263,7 +271,7 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
             const response = await axios.post('https://emkc.org/api/v2/piston/execute', data, {
                 headers: { 'Content-Type': 'application/json' }
             });
-            console.log("API Response:", response.data);
+            //console.log("API Response:", response.data);
 
             // Kiểm tra kết quả thực thi
             const executionResult = response.data.run.output.trim();
@@ -323,9 +331,54 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
         memory: fileSize
     };
 
-    console.log("submission: ", submission);
+    //console.log("submission: ", submission);
     try {
         const newSubmission = await Submission.create(submission);
+
+        //console.log("progressData: ", progressData);
+
+        const moduleProgress = await ModuleProgress.findOne({
+            'moduleItemProgresses._id': progressData._id
+        });
+
+        if (!moduleProgress) {
+            return (next(ErrorResponse('ModuleProgress not found', 404)));
+        }
+
+        // Tìm và cập nhật moduleItemProgress cụ thể
+        const moduleItemProgressIndex = moduleProgress.moduleItemProgresses.findIndex(
+            item => item._id.toString() === progressData._id.toString()
+        );
+
+        if (moduleItemProgressIndex === -1) {
+            return (next(ErrorResponse('ModuleItemProgress not found', 404)));
+        }
+
+        const updatedModuleItemProgress = {
+            ...progressData,
+            attempts: (progressData.attempts || 0) + 1,
+            status: passRate === 100 ? 'completed' : 'in-progress',
+            completedAt: passRate === 100 ? new Date() : null,
+            result: {
+                ...progressData.result,
+                programming: {
+                    submissionId: newSubmission._id,
+                    testCasesPassed: passedTestcases,
+                    totalTestCases: totalTestcases,
+                    score: passRate,
+                    code: code,
+                    language: language,
+                    executionTime: '', // Nếu có
+                    memory: fileSize
+                }
+            }
+        };
+        // Thay thế moduleItemProgress cũ
+        moduleProgress.moduleItemProgresses[moduleItemProgressIndex] = updatedModuleItemProgress;
+
+        // Lưu lại ModuleProgress (middleware sẽ tự động tính toán các giá trị như completionPercentage)
+        await moduleProgress.save();
+
         res.status(200).json({
             data: {
                 results: results,
@@ -334,6 +387,7 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
             },
             testcases: testcaseResults,
             submission: newSubmission,
+            moduleItemProgress: updatedModuleItemProgress
         });
     }
     catch (e) {

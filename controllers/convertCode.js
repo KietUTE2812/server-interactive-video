@@ -19,7 +19,7 @@ function convertCode(code, input, language, codeExecute) {
         }
     });
 
-    //console.log("params: ", params);
+    //onsole.log("params: ", params);
 
     // Xử lý theo từng ngôn ngữ
     switch (language.toLowerCase()) {

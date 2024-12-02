@@ -1,7 +1,10 @@
 import Progress from '../models/Progress.js';
-import  { Module,ModuleItem } from '../models/Module.js';
+import { Module, ModuleItem } from '../models/Module.js';
 import mongoose from 'mongoose';
 import ErrorResponse from '../utils/ErrorResponse.js';
+import asyncHandler from '../middlewares/asyncHandler.js';
+import Course from '../models/Course.js';
+
 
 
 // @desc    Update progress
@@ -60,7 +63,7 @@ const updateVideoProgress = async (req, res, next) => {
             res.status(200).json({ success: true, data: progress });
         }
 
-        
+
     } catch (error) {
         await session.abortTransaction();
         return next(new ErrorResponse(error.message, 400));
@@ -84,11 +87,11 @@ const updateSupplementProgress = async (req, res, next) => {
     const supplementId = progressSupplement.supplementId; // Extract the supplementId from the request body
     // Check if the supplementId exists in the module's moduleItems
     const moduleItem = module.moduleItems.find((item) => item._id.toString() === supplementId)
-    if (!moduleItem) return next(new ErrorResponse('Supplement not found in the module', 404)) 
-    
+    if (!moduleItem) return next(new ErrorResponse('Supplement not found in the module', 404))
+
     // Check if the supplement is already completed
     const supplementProgress = progress.moduleItemProgresses.find((item) => item.moduleItemId.toString() === moduleItem._id.toString())
-    console.log(progress,moduleItem,supplementProgress)
+    console.log(progress, moduleItem, supplementProgress)
     if (supplementProgress && supplementProgress.status === 'completed') return next(new ErrorResponse('Supplement already completed', 400))
 
     // Update the progress for the supplement
@@ -99,8 +102,8 @@ const updateSupplementProgress = async (req, res, next) => {
         res.status(200).json({ success: true, data: progress });
     }
     else {
-         // Create a new progress for the supplement
-          const newProgress = {
+        // Create a new progress for the supplement
+        const newProgress = {
             moduleItemId: moduleItem._id,
             status: progressSupplement.status,
         }
@@ -110,6 +113,211 @@ const updateSupplementProgress = async (req, res, next) => {
     }
     await session.commitTransaction();
 }
+
+
+const createOrGetModuleProgress = asyncHandler(async (userId, moduleId, courseId, session) => {
+    try {
+        // Sử dụng findOneAndUpdate với option upsert để đảm bảo tạo duy nhất
+        const moduleProgress = await Progress.findOneAndUpdate(
+            {
+                userId: userId,
+                moduleId: moduleId,
+                courseId: courseId
+            },
+            {
+                $setOnInsert: {
+                    userId: userId,
+                    moduleId: moduleId,
+                    courseId: courseId,
+                    status: 'in-progress',
+                    moduleItemProgresses: []
+                }
+            },
+            {
+                new: true,      // Trả về document mới sau khi update
+                upsert: true,   // Tạo mới nếu không tồn tại
+                session: session // Sử dụng session của transaction
+            }
+        );
+
+        return moduleProgress;
+    } catch (error) {
+        console.error('Error creating or getting module progress:', error);
+        return (next(new ErrorResponse('Error creating or getting module progress', 500)));
+    }
+});
+
+const findOrCreateModuleItemProgress = (moduleProgress, moduleItemId) => {
+    // Tìm moduleItemProgress với moduleItemId đã cho
+    const existingItemProgress = moduleProgress.moduleItemProgresses.find(
+        item => item.moduleItemId.toString() === moduleItemId.toString()
+    );
+
+    // Nếu đã tồn tại, trả về item đó
+    if (existingItemProgress) {
+        return existingItemProgress;
+    }
+
+    // Nếu chưa tồn tại, tạo mới 
+    const newModuleItemProgress = {
+        moduleItemId: moduleItemId,
+        status: 'in-progress',
+        attempts: 0,
+        timeSpent: 0,
+        startedAt: Date.now(),
+        completedAt: null,
+        result: {
+            programming: {},
+            quiz: {},
+            reading: {},
+            video: {}
+        }
+    };
+
+    // Thêm vào mảng moduleItemProgresses
+    moduleProgress.moduleItemProgresses.push(newModuleItemProgress);
+
+    // Trả về moduleItemProgress mới tạo
+    return newModuleItemProgress;
+};
+
+
+const updateProgrammingProgress = asyncHandler(async (req, res, next) => {
+    const { progressProgramming, moduleItemId, moduleId } = req.body;
+    const { id } = req.params;
+    const userId = req.user.id;
+    const session = await mongoose.startSession();
+    session.startTransaction();
+
+    try {
+        const module = await Module.findById(moduleId);
+        if (!module) {
+            return next(ErrorResponse('Module not found', 404));
+        }
+
+        const course = await Course.findOne({ modules: moduleId });
+        if (!course) {
+            return next(ErrorResponse('Course not found', 404));
+        }
+
+        // Sử dụng phương thức mới để tạo hoặc lấy progress
+        const moduleProgress = await createOrGetModuleProgress(
+            userId,
+            moduleId,
+            course._id,
+            session
+        );
+
+        //console.log("moduleProgress", moduleProgress);
+        // Các thao tác tiếp theo với moduleProgress
+
+        const moduleItemProgress = findOrCreateModuleItemProgress(moduleProgress, moduleItemId);
+
+        //console.log("moduleItemProgress", moduleItemProgress);
+
+
+        await moduleProgress.save();
+        await session.commitTransaction();
+        session.endSession();
+
+        return res.status(200).json({
+            success: true,
+            moduleItemProgress: moduleItemProgress,
+            moduleProgress: moduleProgress
+        });
+    } catch (error) {
+        await session.abortTransaction();
+        session.endSession();
+        return next(error);
+    }
+
+    // if (moduleProgress.status === 'completed') {
+    //     return next(new ErrorResponse('Module is already completed', 400));
+    // }
+
+    // Tìm hoặc tạo moduleItemProgress
+    // let moduleItemProgress = moduleProgress.moduleItemProgresses.find(
+    //     item => item.moduleItemId.toString() === id.toString()
+    // );
+
+    // let moduleItemProgressIndex = moduleItemProgress ? moduleProgress.moduleItemProgresses.indexOf(moduleItemProgress) : -1;
+
+
+    // if (!moduleItemProgress) {
+    //     moduleItemProgress = {
+    //         moduleItemId: id,
+    //         status: 'in-progress',
+    //         startedAt: new Date(),
+    //         attempts: 0,
+    //         timeSpent: 0,
+    //         result: {}
+    //     };
+    //     moduleProgress.moduleItemProgresses.push(moduleItemProgress);
+    //     moduleItemProgressIndex = moduleProgress.moduleItemProgresses.length - 1;
+
+    // }
+
+    // moduleItemProgress.attempts += 1;
+    // moduleItemProgress.timeSpent += timeSpent;
+    // moduleItemProgress.status = isPassed ? 'completed' : 'in-progress';
+
+});
+
+const getProgrammingProgressByProblemId = asyncHandler(async (req, res, next) => {
+    const { id } = req.params;
+    const userId = req.user.id;
+    const session = await mongoose.startSession();
+    session.startTransaction();
+    try {
+        const moduleItem = await ModuleItem.findOne({ programming: id });
+        if (!moduleItem) return next(new ErrorResponse('ModuleItem not found', 404));
+        //console.log("moduleItem: ", moduleItem);
+
+        const module = await Module.findById(moduleItem.module);
+        if (!module) {
+            return next(ErrorResponse('Module not found', 404));
+        }
+
+        const course = await Course.findOne({ modules: module._id });
+        if (!course) {
+            return next(ErrorResponse('Course not found', 404));
+        }
+
+        const moduleProgress = await createOrGetModuleProgress(
+            userId,
+            module._id,
+            course._id,
+            session
+        );
+
+        //console.log("moduleProgress", moduleProgress);
+        // Các thao tác tiếp theo với moduleProgress
+
+        const moduleItemProgress = findOrCreateModuleItemProgress(moduleProgress, moduleItem._id);
+
+        //console.log("moduleItemProgress", moduleItemProgress);
+
+
+        await moduleProgress.save();
+        await session.commitTransaction();
+        session.endSession();
+        return res.status(200).json({
+            success: true,
+            moduleItemProgress: moduleItemProgress,
+            moduleProgress: moduleProgress
+        })
+    }
+    catch (err) {
+        console.log(err);
+        return (next(ErrorResponse('Error creating or getting module progress', 500)));
+    }
+    finally {
+        session.endSession();
+    }
+
+
+
+});
 
 // @desc    Get progress
 // @route   GET /api/v1/progress
@@ -123,5 +331,5 @@ const getProgress = async (req, res, next) => {
     const count = progress.length;
     res.status(200).json({ success: true, count, data: progress });
 }
+export default { updateVideoProgress, updateSupplementProgress, updateProgrammingProgress, getProgrammingProgressByProblemId, getProgress };
 
-export default { updateVideoProgress, updateSupplementProgress, getProgress };

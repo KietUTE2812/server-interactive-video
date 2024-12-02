@@ -1,6 +1,6 @@
 ﻿import mongoose from "mongoose";
 const Schema = mongoose.Schema;
-import {Module} from "./Module.js";
+import { Module } from "./Module.js";
 
 // Schema để lưu chi tiết progress của từng loại module item
 const ModuleItemProgressSchema = new Schema({
@@ -72,7 +72,7 @@ const ModuleItemProgressSchema = new Schema({
             language: String,
             compilationError: String,
             executionTime: Number,
-            memory: Number
+            memory: String,
         },
         // Cho Reading
         reading: {
@@ -151,7 +151,7 @@ ModuleProgressSchema.index({ userId: 1, courseId: 1 });
 ModuleProgressSchema.pre('save', async function (next) {
     const module = await Module.findById(this.moduleId);
     console.log(this.moduleId)
-    if(!module) {
+    if (!module) {
         return next(new Error('Module not found'));
     }
     const totalItems = module.moduleItems.length;
