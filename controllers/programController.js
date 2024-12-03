@@ -410,25 +410,81 @@ export const getSubmission = asyncHandler(async (req, res, next) => {
     });
 });
 
+const checkValidCode = async (code, lang, input, codeExecute) => {
+    if (!code || !lang) {
+        return false;
+    }
+    const codeDe = convertCode(code, input, lang, codeExecute);
+    const languageMap = {
+        "c": { language: "c", version: "10.2.0" },
+        "cpp": { language: "cpp", version: "10.2.0" },
+        "python": { language: "python", version: "3.10.0" },
+        "java": { language: "java", version: "15.0.2" },
+        "javascript": { language: "javascript", version: "18.15.0" }
+    };
+
+    // Kiểm tra ngôn ngữ có hỗ trợ không
+    if (!languageMap[lang.toLowerCase()]) {
+        return next(new ErrorResponse("Unsupported language", 400));
+    }
+
+    // Lấy thông tin ngôn ngữ và phiên bản từ languageMap
+    const { version } = languageMap[lang.toLowerCase()];
+
+    // Dữ liệu cần gửi đi
+    const data = {
+        language: lang,
+        version: version,
+        files: [
+            {
+                name: `main.${lang === 'python' ? 'py' : lang}`,
+                content: codeDe
+            }
+        ],
+        stdin: ""
+    };
+    console.log("Data to send:", data);
+
+    // Gọi API và trả về kết quả
+    const response = await axios.post('https://emkc.org/api/v2/piston/execute', data, {
+        headers: { 'Content-Type': 'application/json' }
+    });
+
+    console.log("API Response:", response.data);
+    if(response.data.run.stderr) {
+        return false;
+    }
+    return true;
+}
+
 export const generateChartCode = asyncHandler(async (req, res, next) => {
-    const { code, language } = req.body;
-    if (!code || !language) {
+    const { code, language, codeExecute, input } = req.body;
+    console.log("Received request:", req.codeExecute);
+    if (!code || !language || !input || !codeExecute) {
         return next(new ErrorResponse("Missing code or language", 400));
     }
+    const checkCode = await checkValidCode(code, language, input, codeExecute);
+    if (!checkCode) {
+        return next(new ErrorResponse("Invalid code", 400));
+    }
+    const string = '`Result`';
     const prompt = `Generate a chart from the given code, using ${language} language
     Required:
     - Input: 
         ${code}
-      - Output: There is only one code for MERMAID to visualize how the code runs. Important, A content of a node in chart must be wrap by the parentheses "". If the code does not contain data that can be visualized, return a message saying "No data to visualize".
-      - Example: 
+      - Output: There is only one code for MERMAID to visualize how the code runs, dont explain it, chart code must be begin by --- and end by ---. Important, A content of a node in chart must be wrap by the parentheses "". If the code does not contain data that can be visualized, return a message saying "No data to visualize".
+      - Example Output:
+      ---
         graph TD;
-        A["Start"] --> B["Initialize left = 0, right = len(nums) - 1"];
-        B --> C{"left <= right?"};
-        C -- No --> D["Return left"];
+        A["Start"] --> B["Initialize"];
+        B --> C{"Condition"};
+        C -- No --> D["print('No')"];
+      ---
     `;
     const response = await generate.generateChartCode(prompt);
+    console.log("Promt:", prompt);
+    console.log("Response:", response);
     if (!response || !response.data ) {
-
         return next(new ErrorResponse('Failed to generate chart code', 500));
     }
     res.status(200).json({ success: true, data: response.data});
