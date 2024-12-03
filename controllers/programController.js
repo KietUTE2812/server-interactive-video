@@ -189,13 +189,13 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
     if (!code || !language || !testcases.length) {
         return next(new ErrorResponse("Missing data", 400));
     }
-    // console.log('Received request body:', {
-    //     code: code ? 'Code received' : 'No code',
-    //     language,
-    //     testcases: testcases ? testcases.length : 'No testcases',
-    //     codeExecute,
-    //     progressData: JSON.stringify(progressData), // Log toàn bộ progressData
-    // });
+    console.log('Received request body:', {
+        code: code ? 'Code received' : 'No code',
+        language,
+        testcases: testcases ? testcases.length : 'No testcases',
+        codeExecute,
+        progressData: JSON.stringify(progressData), // Log toàn bộ progressData
+    });
     const languageMap = {
         "c": { language: "c", version: "10.2.0" },
         "cpp": { language: "cpp", version: "10.2.0" },
@@ -207,6 +207,9 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
     // Kiểm tra ngôn ngữ có hỗ trợ không
     if (!languageMap[language.toLowerCase()]) {
         return next(new ErrorResponse("Unsupported language", 400));
+    }
+    if (!progressData) {
+        return next(new ErrorResponse("Progress data not found", 400));
     }
 
     // Lấy thông tin ngôn ngữ và phiên bản từ languageMap
@@ -338,7 +341,7 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
         //console.log("progressData: ", progressData);
 
         const moduleProgress = await ModuleProgress.findOne({
-            'moduleItemProgresses._id': progressData._id
+            'moduleItemProgresses._id': progressData?._id
         });
 
         if (!moduleProgress) {
