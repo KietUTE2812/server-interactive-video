@@ -8,6 +8,7 @@ const RoadmapItemSchema = new Schema({
         required: true,
         trim: true
     },
+    tags: [String],
     description: {
         type: String,
         required: true,

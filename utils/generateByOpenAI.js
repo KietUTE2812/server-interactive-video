@@ -19,7 +19,7 @@ async function generateRoadmap(prompt) {
             top_p: 0.7,
             stream: true,
         });
-
+        out = "";
         for await (const chunk of stream) {
             if (chunk.choices && chunk.choices.length > 0) {
                 const newContent = chunk.choices[0].delta.content;
@@ -76,7 +76,7 @@ const generateChartCode = async (prompt) =>
             top_p: 0.7,
             stream: true,
         });
-
+        out = "";
         for await (const chunk of stream) {
             if (chunk.choices && chunk.choices.length > 0) {
                 const newContent = chunk.choices[0].delta.content;
@@ -92,8 +92,8 @@ const generateChartCode = async (prompt) =>
 }
 
 const extractMermaidChart = (text) => {
-    const mermaidStart = text.indexOf('```mermaid\n') + '```mermaid\n'.length;
-    const mermaidEnd = text.indexOf('\n```', mermaidStart);
+    const mermaidStart = text.indexOf('---\n') + '---\n'.length;
+    const mermaidEnd = text.indexOf('\n---', mermaidStart);
     if (mermaidStart === -1 || mermaidEnd === -1) {
         return null;
     }

@@ -38,6 +38,7 @@ const RoadmapItemSchema = new Schema({
         required: true,
         trim: true
     },
+    tags: [String],
     completed: {
         type: Boolean,
         default: false
