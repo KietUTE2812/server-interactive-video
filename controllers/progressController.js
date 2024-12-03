@@ -114,6 +114,7 @@ const updateSupplementProgress = async (req, res, next) => {
     await session.commitTransaction();
 }
 
+
 const createOrGetModuleProgress = asyncHandler(async (userId, moduleId, courseId, session) => {
     try {
         // Sử dụng findOneAndUpdate với option upsert để đảm bảo tạo duy nhất
@@ -317,4 +318,18 @@ const getProgrammingProgressByProblemId = asyncHandler(async (req, res, next) =>
 
 
 });
-export default { updateVideoProgress, updateSupplementProgress, updateProgrammingProgress, getProgrammingProgressByProblemId };
+
+// @desc    Get progress
+// @route   GET /api/v1/progress
+// @access  Private
+const getProgress = async (req, res, next) => {
+    const userId = req.user._id;
+    const courseId = req.query.courseId;
+    console.log(userId, courseId)
+    const progress = await Progress.find({ userId, courseId }).populate('moduleItemProgresses.moduleItemId').populate('moduleId', 'title');
+    if (!progress) return next(new ErrorResponse('Progress not found', 404))
+    const count = progress.length;
+    res.status(200).json({ success: true, count, data: progress });
+}
+export default { updateVideoProgress, updateSupplementProgress, updateProgrammingProgress, getProgrammingProgressByProblemId, getProgress };
+

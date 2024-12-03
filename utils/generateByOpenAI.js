@@ -40,7 +40,7 @@ function extractJSONFromString(text) {
         const jsonEnd = text.indexOf('\n```', jsonStart);
 
         if (jsonStart === -1 || jsonEnd === -1) {
-            throw new Error('Không tìm thấy JSON hợp lệ trong chuỗi');
+            return null;
         }
 
         // Trích xuất chuỗi JSON
@@ -55,7 +55,6 @@ function extractJSONFromString(text) {
         };
 
     } catch (error) {
-        console.error('Lỗi khi xử lý JSON:', error);
         return {
             success: false,
             message: error.message,
@@ -64,4 +63,45 @@ function extractJSONFromString(text) {
     }
 }
 
-export default generateRoadmap;
+const generateChartCode = async (prompt) =>
+{
+    try {
+        const stream = await client.chat.completions.create({
+            model: "Qwen/Qwen2.5-Coder-32B-Instruct",
+            messages: [
+                { role: "user", content: prompt },
+            ],
+            temperature: 0.5,
+            max_tokens: 2048,
+            top_p: 0.7,
+            stream: true,
+        });
+
+        for await (const chunk of stream) {
+            if (chunk.choices && chunk.choices.length > 0) {
+                const newContent = chunk.choices[0].delta.content;
+                out += newContent;
+            }
+        }
+
+        return extractMermaidChart(out);
+    } catch (error) {
+        console.error("Error generating chart code:", error);
+        throw error; // Bắt và xử lý lỗi nếu có
+    }
+}
+
+const extractMermaidChart = (text) => {
+    const mermaidStart = text.indexOf('```mermaid\n') + '```mermaid\n'.length;
+    const mermaidEnd = text.indexOf('\n```', mermaidStart);
+    if (mermaidStart === -1 || mermaidEnd === -1) {
+        return null;
+    }
+    return {
+        success: true,
+        data: text.substring(mermaidStart, mermaidEnd)
+    };
+}
+
+
+export default { generateRoadmap, generateChartCode };
