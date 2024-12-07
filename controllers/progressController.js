@@ -326,8 +326,9 @@ const getProgress = async (req, res, next) => {
     const userId = req.user._id;
     const courseId = req.query.courseId;
     console.log(userId, courseId)
-    const progress = await Progress.find({ userId, courseId }).populate('moduleItemProgresses.moduleItemId').populate('moduleId', 'title');
+    const progress = await Progress.find({ userId, courseId }).populate('moduleItemProgresses.moduleItemId').populate('moduleId', 'title index');
     if (!progress) return next(new ErrorResponse('Progress not found', 404))
+    progress.sort((a, b) => a.moduleId.index - b.moduleId.index);
     const count = progress.length;
     res.status(200).json({ success: true, count, data: progress });
 }
