@@ -331,5 +331,41 @@ const getProgress = async (req, res, next) => {
     const count = progress.length;
     res.status(200).json({ success: true, count, data: progress });
 }
-export default { updateVideoProgress, updateSupplementProgress, updateProgrammingProgress, getProgrammingProgressByProblemId, getProgress };
+
+const getGradeByCourseId = asyncHandler(async (req, res, next) => {
+    const { id: courseId } = req.params;
+    const { ids: moduleItemIds } = req.query; // Lấy ids từ query parameters
+    const userId = req.user.id;
+
+    try {
+        // Chuyển đổi ids sang mảng nếu cần
+        const parsedModuleItemIds = Array.isArray(moduleItemIds)
+            ? moduleItemIds
+            : [moduleItemIds].filter(Boolean);
+
+        // Tìm kiếm progress dựa trên courseId, userId và các moduleItemIds
+        const progresses = await Progress.find({
+            courseId,
+            userId,
+            'moduleItemProgresses.moduleItemId': { $in: parsedModuleItemIds }
+        }).select('moduleItemProgresses');
+
+        // Trích xuất moduleItemProgresses phù hợp
+        const filteredProgresses = progresses.flatMap(progress =>
+            progress.moduleItemProgresses.filter(item =>
+                parsedModuleItemIds.includes(item.moduleItemId.toString())
+            )
+        );
+
+        res.status(200).json({
+            success: true,
+            data: filteredProgresses
+        });
+    } catch (error) {
+        next(error);
+    }
+
+
+})
+export default { updateVideoProgress, updateSupplementProgress, updateProgrammingProgress, getProgrammingProgressByProblemId, getProgress, getGradeByCourseId };
 
