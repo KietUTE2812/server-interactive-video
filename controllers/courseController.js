@@ -7,10 +7,10 @@ import mongoose from "mongoose";
 import { filter } from "async";
 export const getCourses = asyncHandler(async (req, res, next) => {
     let { search, userId, limit, page = 1, ...otherFilters } = req.query;
-    
+
     // Khởi tạo object filter cơ bản
     let filter = { status: 'published', ...otherFilters };
-    
+
     // Nếu có tham số search, tạo điều kiện tìm kiếm đa trường
     if (search) {
         filter = {
@@ -28,7 +28,7 @@ export const getCourses = asyncHandler(async (req, res, next) => {
                 { 'profile.fullName': { $regex: search, $options: 'i' } },
             ]
         }).select('_id');
-        
+
         if (instructors.length > 0) {
             filter.$or.push({ instructor: { $in: instructors.map(i => i._id) } });
         }
@@ -105,7 +105,7 @@ export const getCourse = asyncHandler(async (req, res, next) => {
 });
 
 export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
-    
+
     const course = await Course.findOne({ courseId: { $regex: new RegExp(`^${req.params.id}$`, 'i') } })
         .populate({
             path: 'instructor',
@@ -124,7 +124,7 @@ export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
             select: 'email profile'
         })
         .populate('reviewCount');
-    
+
     if (!course) {
         return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
     }
@@ -155,13 +155,13 @@ export const getCourseById = asyncHandler(async (req, res) => {
         select: 'index title moduleItems description', // Lấy thêm moduleItems
         populate: {
             path: 'moduleItems', // Populate thêm thông tin của moduleItems
-            select: 'title content type' // Chọn các trường cần thiết của moduleItems
+            select: 'title contentType type isGrade icon' // Chọn các trường cần thiết của moduleItems
         }
     }).populate({
         path: 'approvedBy',
         select: 'email profile'
     })
-    .populate('reviewCount');
+        .populate('reviewCount');
     if (!course) {
         res.status(404);
         throw new Error('Course not found');
