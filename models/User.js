@@ -121,7 +121,20 @@ const UserSchema = new Schema({
     lastLoginAt: {
         type: Date,
         default: Date.now
-    }
+    },
+    certificate: [{
+        course: {
+            type: Schema.Types.ObjectId,
+            ref: 'Course'
+        },
+        certificate: {
+            type: String
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        }
+    }]
 
 }, {
     timestamps: true
