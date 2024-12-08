@@ -143,10 +143,6 @@ const ModuleProgressSchema = new Schema({
     timestamps: true
 });
 
-// Index cho việc tìm kiếm
-ModuleProgressSchema.index({ userId: 1, moduleId: 1 }, { unique: true });
-ModuleProgressSchema.index({ userId: 1, courseId: 1 });
-
 // Middleware để tự động cập nhật completionPercentage
 ModuleProgressSchema.pre('save', async function (next) {
     const module = await Module.findById(this.moduleId);

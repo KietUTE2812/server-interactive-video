@@ -38,7 +38,8 @@ const getQuizById = asyncHandler(async (req, res, next) => {
     })
     if(progress) {
         const moduleItemProgress = progress.moduleItemProgresses.find(p => p.moduleItemId.toString() === quiz.moduleItem._id.toString());
-        if(moduleItemProgress && moduleItemProgress.status === 'completed') {
+        if(moduleItemProgress && (moduleItemProgress.status === 'completed' || moduleItemProgress.status === 'in-progress')) {
+            console.log('Quiz in progress or completed');
             return res.status(200).json({ success: true, data: quiz, quizProgress: moduleItemProgress });
         }
     }
@@ -166,9 +167,9 @@ const answerQuiz = asyncHandler(async (req, res, next) => {
             calculateQuizScore(quiz.questions, answers, timeSpent);
 
         const scorePercentage = (earnedPoints / totalPoints) * 100;
-        const isPassed = scorePercentage >= quiz.passingScore;
+        let isPassed = scorePercentage >= quiz.passingScore;
 
-        const course = await Course.findOne({ module: { $in: [quiz.moduleItem.moduleId] } }).session(session);
+        const course = await Course.findOne({ modules: { $in: [quiz.moduleItem.module] } }).session(session);
         let moduleProgress = await Progress.findOne({
             userId: req.user._id,
             moduleId: quiz.moduleItem.module,
@@ -183,10 +184,11 @@ const answerQuiz = asyncHandler(async (req, res, next) => {
                 moduleItemProgresses: []
             });
         }
-
         if(moduleProgress.status === 'completed') {
             return next(new ErrorResponse('Module is already completed', 400));
         }
+
+        moduleProgress.status = 'in-progress';
 
         let moduleItemProgress = moduleProgress.moduleItemProgresses.find(
             p => p.moduleItemId.toString() === quiz.moduleItem._id.toString()
@@ -205,8 +207,51 @@ const answerQuiz = asyncHandler(async (req, res, next) => {
             moduleItemProgressIndex = moduleProgress.moduleItemProgresses.length - 1;
         }
 
-        if(moduleItemProgress.status === 'completed') {
-            return next(new ErrorResponse('Quiz is already completed', 400));
+        if(moduleItemProgress.status === 'completed' || moduleItemProgress.status === 'in-progress') {
+            const currentScore = scorePercentage;
+            const highestScore = moduleItemProgress.result.quiz.score || 0
+            if(currentScore > highestScore) {
+                moduleItemProgress.result.quiz = {
+                    score: currentScore,
+                    totalQuestions,
+                    correctAnswers,
+                    wrongAnswers,
+                    timeSpent,
+                    isPassed,
+                    answers: processedAnswers
+                };
+                moduleItemProgress.status = isPassed ? 'completed' : 'in-progress';
+                moduleItemProgress.attempts += 1
+                moduleItemProgress.timeSpent += timeSpent;
+                moduleItemProgress.startedAt = new Date();
+                if (isPassed) {
+                    moduleItemProgress.completedAt = new Date();
+                }
+                moduleProgress.moduleItemProgresses[moduleItemProgressIndex] = moduleItemProgress
+                await moduleProgress.save({ session });
+                await session.commitTransaction();
+                return res.status(200).json({
+                    success: true,
+                    data: {
+                        moduleItemProgress,
+                        currentScore: scorePercentage,
+                        passed: isPassed,
+                    }
+                });
+
+            }
+            else {
+                await session.commitTransaction();
+                return res.status(200).json({
+                    success: true,
+                    data: {
+                        moduleItemProgress,
+                        currentScore: scorePercentage,
+                        passed: isPassed,
+                    }
+                });
+            }
+        
         }
 
         moduleItemProgress.attempts += 1;
@@ -239,17 +284,20 @@ const answerQuiz = asyncHandler(async (req, res, next) => {
         res.status(200).json({
             success: true,
             data: {
-                moduleProgressId: moduleProgress._id,
-                score: scorePercentage,
-                totalPoints,
-                earnedPoints,
+                // moduleProgressId: moduleProgress._id,
+                // score: scorePercentage,
+                // totalPoints,
+                // earnedPoints,
+                // passed: isPassed,
+                // passingScore: quiz.passingScore,
+                // answers: processedAnswers,
+                // attempts: moduleItemProgress.attempts,
+                // totalTimeSpent: moduleItemProgress.timeSpent,
+                // status: moduleItemProgress.status,
+                // completionPercentage: moduleProgress.completionPercentage
+                moduleItemProgress,
+                currentScore: scorePercentage,
                 passed: isPassed,
-                passingScore: quiz.passingScore,
-                answers: processedAnswers,
-                attempts: moduleItemProgress.attempts,
-                totalTimeSpent: moduleItemProgress.timeSpent,
-                status: moduleItemProgress.status,
-                completionPercentage: moduleProgress.completionPercentage
             }
         });
     } catch (error) {
