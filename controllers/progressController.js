@@ -7,6 +7,7 @@ import Course from '../models/Course.js';
 
 
 
+
 // @desc    Update progress
 // @route   PUT /api/v1/progress/:id/video
 // @access  Private
@@ -81,7 +82,7 @@ const updateSupplementProgress = async (req, res, next) => {
     const userId = req.user.id;
     const session = await mongoose.startSession();
     session.startTransaction();
-
+    if (!id) return next(ErrorResponse('Progress not found', 404))
     const progress = await Progress.findById(id).populate('moduleItemProgresses.moduleItemId').session(session); // Find the progress of the user
     const module = await Module.findById(progress.moduleId).populate('moduleItems').session(session); // Find the module associated with the progress
     const supplementId = progressSupplement.supplementId; // Extract the supplementId from the request body
@@ -344,6 +345,7 @@ const getGradeByCourseId = asyncHandler(async (req, res, next) => {
             ? moduleItemIds
             : [moduleItemIds].filter(Boolean);
 
+
         // Tìm kiếm progress dựa trên courseId, userId và các moduleItemIds
         const progresses = await Progress.find({
             courseId,
@@ -368,5 +370,27 @@ const getGradeByCourseId = asyncHandler(async (req, res, next) => {
 
 
 })
-export default { updateVideoProgress, updateSupplementProgress, updateProgrammingProgress, getProgrammingProgressByProblemId, getProgress, getGradeByCourseId };
+const getCheckProgress = asyncHandler(async (req, res, next) => {
+    const { id: courseId } = req.params;
+    const userId = req.user.id;
+    console.log("courseId", courseId)
+    // Tìm tất cả progress của khóa học và user này
+    const progresses = await Progress.find({
+        courseId: courseId,
+        userId: userId
+    });
 
+    // Kiểm tra xem có progress nào không phải trạng thái completed không
+    const hasIncompletedProgress = progresses.some(
+        progress => progress.status !== 'completed'
+    );
+
+    // Trả về false nếu có bất kỳ progress nào chưa hoàn thành
+    // Trả về true nếu tất cả đều ở trạng thái completed
+    return res.status(200).json({
+        success: true,
+        isAllCompleted: !hasIncompletedProgress
+    });
+})
+
+export default { updateVideoProgress, updateSupplementProgress, updateProgrammingProgress, getProgrammingProgressByProblemId, getProgress, getGradeByCourseId, getCheckProgress }

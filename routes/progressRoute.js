@@ -13,6 +13,8 @@ router.route('/:id/programming')
     .get(protect, authorize("student"), progressController.getProgrammingProgressByProblemId)
     .put(protect, authorize('student'), progressController.updateProgrammingProgress);
 
+router.route('/:id')
+    .get(protect, authorize('student'), progressController.getCheckProgress)
 router.route(`/:id/grade`)
     .get(protect, authorize('student'), progressController.getGradeByCourseId)
 
