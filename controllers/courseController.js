@@ -7,9 +7,30 @@ import mongoose from "mongoose";
 import { filter } from "async";
 export const getCourses = asyncHandler(async (req, res, next) => {
     let { search, userId, limit, page = 1, ...otherFilters } = req.query;
+    const user = req.user;
+    console.log('User:', user);
+
+    if (user.role === 'instructor') {
+        otherFilters.instructor = user._id;
+    }
+    if (user.role === 'student') {
+        otherFilters.isApproved = true;
+    }
 
     // Khởi tạo object filter cơ bản
     let filter = { status: 'published', ...otherFilters };
+    if (otherFilters.tags) {
+        otherFilters.tags = otherFilters.tags.split(',');
+    }
+    if (otherFilters.tags && Array.isArray(otherFilters.tags)) {
+        filter.tags = { $all: otherFilters.tags };
+    }
+    if (otherFilters.level && otherFilters.level !== 'all') {
+        filter.level = { $regex: otherFilters.level, $options: 'i' };
+    }
+    else if (otherFilters.level === 'all') {
+        delete filter.level;
+    }
 
     // Nếu có tham số search, tạo điều kiện tìm kiếm đa trường
     if (search) {
@@ -17,8 +38,6 @@ export const getCourses = asyncHandler(async (req, res, next) => {
             ...filter,
             $or: [
                 { title: { $regex: search, $options: 'i' } },
-                { tags: { $in: [new RegExp(search, 'i')] } },
-                { level: { $regex: search, $options: 'i' } }
             ]
         };
 
@@ -34,11 +53,7 @@ export const getCourses = asyncHandler(async (req, res, next) => {
         }
     }
 
-    // Xử lý các filter khác nếu có
-    if (otherFilters.tags && Array.isArray(otherFilters.tags)) {
-        filter.tags = { $in: otherFilters.tags };
-    }
-
+    console.log('Filter:', filter);
     // Đếm tổng số document thỏa mãn điều kiện
     const count = await Course.countDocuments(filter);
 

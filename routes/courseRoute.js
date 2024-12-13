@@ -56,7 +56,7 @@ const router = express.Router();
 
 // Route cho danh sách khóa học
 router.route('/')
-    .get(getCourses)
+    .get(isLoggedin,getCourses)
     .post(protect, authorize('instructor', 'admin'), createCourse); //protect, authorize('instructor', 'admin'),
 router.route('/getCourseByInstructor').get(protect, authorize('instructor', 'admin'), getCourseByInstructor);
 // Route cho khóa học cụ thể
