@@ -23,6 +23,7 @@ const vnpay = new VNPay({
 // @access    Public
 const getPayments = asyncHandler(async (req, res, next) => {
     const { fromMonth = 1, toMonth = 12, year } = req.query;
+    console.log(fromMonth, toMonth, year)
 
     if(fromMonth > toMonth) {
         return next(new ErrorResponse('From month must be less than to month', 400));
