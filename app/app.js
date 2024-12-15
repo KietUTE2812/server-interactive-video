@@ -14,6 +14,7 @@ import ErrorResponse from '../utils/ErrorResponse.js';
 import authRoutes from '../routes/authRouteGithub.js';
 import courseGradeRoute from '../routes/courseGradeRoute.js';
 import courseRoute from '../routes/courseRoute.js';
+import studentRoute from '../routes/studentRoute.js';
 import programRoute from '../routes/programRoute.js';
 import streamRoute from '../routes/streamRoute.js';
 import authRoute from '../routes/authRoute.js';
@@ -42,7 +43,7 @@ dbConnect();
 const app = express();
 
 app.use(express.json({
-    limit: '*'
+  limit: '*'
 }))
 // Enable CORS
 app.use(cors({
@@ -101,6 +102,8 @@ app.use('/api/v1/modules', moduleRoute)
 app.use('/api/v1/videos', videoRoute)
 app.use('/api/v1/notifications', notificationRoute)
 app.use('/api/v1/progress', progressRoute)
+app.use('/api/v1/student', studentRoute)
+
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {
   console.error(err.stack);
