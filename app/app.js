@@ -26,6 +26,7 @@ import moduleRoute from "../routes/moduleRoute.js";
 import notificationRoute from "../routes/notificationRoute.js";
 import videoRoute from "../routes/videoRoute.js";
 import progressRoute from "../routes/progressRoute.js";
+import moduleItemRoute from "../routes/moduleItemRoute.js";
 
 // // Use environment variables for Redis connection
 // const redisHost = process.env.REDIS_HOST || 'localhost';
@@ -103,6 +104,8 @@ app.use('/api/v1/videos', videoRoute)
 app.use('/api/v1/notifications', notificationRoute)
 app.use('/api/v1/progress', progressRoute)
 app.use('/api/v1/student', studentRoute)
+
+app.use('/api/v1/moduleitem', moduleItemRoute)
 
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {
