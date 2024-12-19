@@ -10,6 +10,7 @@ import File from '../models/File.js';
 import dotenv from 'dotenv';
 import minioClient from '../config/minioClient.js';
 
+
 // Module Items
 
 //@desc Create module item type supplement 
@@ -475,3 +476,391 @@ export const getModuleItemById = asyncHandler(async (req, res, next) => {
         data: moduleItem
     });
 });
+
+export const editSupplementByItemId = asyncHandler(async (req, res, next) => {
+    const itemId = req.params.itemId;
+    const { title, description } = req.body;
+
+    // Validate inputs
+    if (!title || !description) {
+        return next(new ErrorResponse('Please provide title and description', 400));
+    }
+
+    if (!req.file) {
+        return next(new ErrorResponse('Please provide a file', 400));
+    }
+
+    console.log('itemId', itemId);
+    if (!itemId) {
+        return next(new ErrorResponse('Please provide item id', 400));
+    }
+    // const moduleItem = await ModuleItem.findById(itemId);
+    // if (!moduleItem) {
+    //     return next(new ErrorResponse('No module item found with id', 404));
+    // }
+    //console.log('moduleItem', moduleItem);
+    const bucketName = process.env.MINIO_BUCKET_NAME;
+    const objectName = Date.now() + '-' + req.file.originalname;
+    const bucketExists = await minioClient.bucketExists(bucketName);
+    if (!bucketExists) {
+        await minioClient.makeBucket(bucketName, 'us-east-1');
+    }
+
+    await minioClient.putObject(
+        bucketName,
+        objectName,
+        req.file.buffer,
+        req.file.size,
+        {
+            'Content-Type': req.file.mimetype
+        }
+    );
+    const url = `${process.env.MINIO_URL}/${objectName}`;
+
+    const session = await mongoose.startSession();
+    try {
+        // Start transaction
+        await session.startTransaction();
+
+        // 1. Update module item with session
+        const moduleItem = await ModuleItem.findByIdAndUpdate(
+            itemId,
+            {
+                title,
+                description,
+                reading: url.toString()
+            },
+            {
+                session,
+                new: true,
+                runValidators: true
+            }
+        )
+        await session.commitTransaction()
+        res.status(200).json({
+            success: true,
+            data: moduleItem
+        })
+    } catch (err) {
+        console.error('Error updating module item:', err);
+        return next(new ErrorResponse('Error updating module item', 500));
+    } finally {
+        // Always end session
+        session.endSession();
+    }
+
+});
+
+export const editLectureByItemId = asyncHandler(async (req, res, next) => {
+    const itemId = req.params.itemId;
+    const { title, description, questions } = req.body;
+
+    // Validation checks
+    if (!title || !description || !questions) {
+        return next(new ErrorResponse('Please provide title and description', 400));
+    }
+
+    if (!req.file) {
+        return next(new ErrorResponse('Please provide a file', 400));
+    }
+    console.log("test", req.file);
+    const maxRetries = 3;
+    let retryCount = 0;
+
+    while (retryCount < maxRetries) {
+        const session = await mongoose.startSession();
+        try {
+            session.startTransaction({
+                readConcern: { level: 'snapshot' },
+                writeConcern: { w: 'majority' }
+            });
+
+            const bucketName = process.env.MINIO_BUCKET_NAME;
+            const objectName = `${Date.now()}-${req.file.originalname}`;
+
+            try {
+                const bucketExists = await minioClient.bucketExists(bucketName);
+                if (!bucketExists) {
+                    await minioClient.makeBucket(bucketName, 'us-east-1');
+                }
+
+                await minioClient.putObject(
+                    bucketName,
+                    objectName,
+                    req.file.buffer,
+                    req.file.size,
+                    { 'Content-Type': req.file.mimetype }
+                );
+            } catch (minioError) {
+                await session.abortTransaction();
+                console.error('MinIO upload error:', minioError);
+                return next(new ErrorResponse('Error uploading file', 500));
+            }
+
+            // try {
+            //     if (typeof questions === 'string') {
+            //         questions = JSON.parse(questions);
+            //     }
+            // } catch (parseError) {
+            //     await session.abortTransaction();
+            //     return next(new ErrorResponse('Invalid questions format', 400));
+            // }
+
+            const questionsArray = Array.isArray(questions) ? questions : [questions];
+            const validQuestions = questionsArray
+                .filter(q => q.index !== null && q.question !== null && q.answers?.length > 0)
+                .map(q => ({
+                    ...q,
+                    answers: q.answers.filter(a => a.content !== null && a.isCorrect !== null)
+                }));
+            const url = `${process.env.MINIO_URL}/${objectName}`;
+            const videoData = {
+                file: url.toString(),
+                duration: req.body.duration,
+                questions: validQuestions,
+            };
+
+            let moduleItem = await ModuleItem.findById(itemId).session(session);
+            if (!moduleItem) {
+                await session.abortTransaction();
+                return next(new ErrorResponse(`No found module item with id ${itemId}`, 404));
+            }
+
+            const video = await Video.findByIdAndUpdate(
+                moduleItem.video,
+                {
+                    $set: {
+                        file: videoData.file,
+                        duration: videoData.duration,
+                        questions: videoData.questions.map(q => ({
+                            index: q.index,
+                            questionType: q.questionType,
+                            question: q.question,
+                            startTime: q.startTime,
+                            answers: q.answers.map(a => ({
+                                content: a.content,
+                                isCorrect: a.isCorrect
+                            }))
+                        }))
+                    }
+                },
+                {
+                    session,
+                    new: true,
+                    runValidators: true
+                }
+            )
+            if (!video) {
+                await session.abortTransaction();
+                return next(new ErrorResponse(`No found video to update`, 404));
+            }
+
+            const updatedModuleItem = await ModuleItem.findByIdAndUpdate(
+                itemId,
+                {
+                    $set: {
+                        title,
+                        description,
+                        video: video._id
+                    }
+                },
+                {
+                    session,
+                    new: true,
+                    runValidators: true
+                }
+            ).populate('video'); // Populate video data if needed
+
+            if (!updatedModuleItem) {
+                await session.abortTransaction();
+                return next(new ErrorResponse(`Failed to update module item`, 400));
+            }
+
+            await session.commitTransaction();
+
+            return res.status(200).json({  // Changed to 200 since it's an update
+                success: true,
+                data: updatedModuleItem
+            });
+        } catch (error) {
+            console.error('Error starting transaction:', error);
+            return next(new ErrorResponse('Error starting transaction', 500));
+        }
+        finally { session.endSession(); }
+    }
+    // If we've exhausted all retries
+    return next(new ErrorResponse('Failed to edit module item after multiple attempts', 500));
+
+})
+export const editQuizByItemId = asyncHandler(async (req, res, next) => {
+    const itemId = req.params.itemId;
+    const quizData = req.body;
+    if (!quizData || !quizData.questions || !Array.isArray(quizData.questions)) {
+        return next(new ErrorResponse('Please provide valid quiz data with questions array', 400));
+    }
+    console.log("quiz data:", req.body, itemId);
+    const session = await mongoose.startSession();
+    try {
+        session.startTransaction();
+        const moduleItem = await ModuleItem.findById(itemId).session(session);
+        if (!moduleItem) {
+            await session.abortTransaction();
+            return next(new ErrorResponse(`No found module item with id ${itemId}`, 404));
+        }
+
+        const quiz = await Quiz.findByIdAndUpdate(
+            moduleItem.quiz,
+            {
+                $set: {
+                    moduleItem: moduleItem._id,
+                    duration: quizData.duration,
+                    passingScore: quizData.passingScore,
+                    questions: quizData.questions.map(q => ({
+                        orderNumber: q.orderNumber,
+                        content: q.content,
+                        type: q.type,
+                        points: q.points,
+                        answers: q.answers.map(a => ({
+                            content: a.content,
+                            isCorrect: a.isCorrect
+                        })),
+                        explanation: q.explanation
+                    }))
+                }
+            },
+            {
+                session,
+                new: true,
+                runValidators: true
+            }
+        );
+
+        if (!quiz) {
+            await session.abortTransaction();
+            return next(new ErrorResponse(`No found quiz to update`, 404));
+        }
+
+        const updatedModuleItem = await ModuleItem.findByIdAndUpdate(
+            itemId,
+            {
+                $set: {
+                    title: quizData.title,
+                    description: quizData.description,
+                    type: quizData.type,
+                    contentType: quizData.contentType,
+                    icon: quizData.icon,
+                    isGrade: quizData.isGrade,
+                    quiz: quiz._id
+                }
+            },
+            { session, new: true, runValidators: true }
+        ).populate('quiz');
+
+        if (!updatedModuleItem) {
+            await session.abortTransaction();
+            return next(new ErrorResponse(`Failed to update module item`, 400));
+        }
+
+        await session.commitTransaction();
+
+        return res.status(200).json({
+            success: true,
+            data: updatedModuleItem
+        });
+    } catch (error) {
+        console.error('Error updating quiz:', error);
+        return next(new ErrorResponse('Error updating quiz', 500));
+    } finally {
+        session.endSession();
+    }
+
+})
+
+export const editProgrammingByItemId = asyncHandler(async (req, res, next) => {
+    const itemId = req.params.itemId;
+    const programData = req.body;
+    if (!programData) {
+        return next(new ErrorResponse('Please provide valid programming data', 400));
+    }
+    console.log("Edit Programming", itemId, programData);
+    const session = await mongoose.startSession();
+    try {
+        const moduleItem = await ModuleItem.findById(itemId);
+        if (!moduleItem) {
+            return next(new ErrorResponse(`No found module item with id ${itemId}`, 404));
+        }
+        await session.startTransaction();
+        const program = await ProgramProblem.findByIdAndUpdate(
+            moduleItem.programming,
+            {
+                $set: {
+                    problemName: programData.programming.problemName,
+                    content: programData.programming.content,
+                    difficulty: programData.programming.difficulty,
+                    tags: programData.programming.tags,
+                    constraints: programData.programming.constraints,
+                    inputFormat: programData.programming.inputFormat,
+                    outputFormat: programData.programming.outputFormat,
+                    sampleInput: programData.programming.sampleInput,
+                    sampleOutput: programData.programming.sampleOutput,
+                    explanation: programData.programming.explanation,
+                    editorial: programData.programming.editorial,
+                    testcases: programData.programming.testcases,
+                    createdBy: req.user.id,
+                    baseScore: programData.programming.baseScore,
+                    timeBonus: programData.programming.timeBonus,
+                    memoryBonus: programData.programming.memoryBonus,
+                    codeFormat: programData.programming.codeFormat
+                }
+            },
+            {
+                session,
+                new: true,
+                runValidators: true
+            }
+        );
+
+        if (!program) {
+            await session.abortTransaction();
+            return next(new ErrorResponse(`No found program to update`, 404));
+        }
+
+        const updatedModuleItem = await ModuleItem.findByIdAndUpdate(
+            itemId,
+            {
+                $set: {
+                    title: programData.title,
+                    description: programData.description,
+                    type: programData.type,
+                    contentType: programData.contentType,
+                    icon: programData.icon,
+                    isGrade: programData.isGrade,
+                    programming: program._id
+                }
+            },
+            {
+                session,
+                new: true,
+                runValidators: true
+            }
+        ).populate('programming');
+
+        if (!updatedModuleItem) {
+            await session.abortTransaction();
+            return next(new ErrorResponse(`Failed to update module item`, 400));
+        }
+
+        await session.commitTransaction();
+        console.log("Updated Module Item", updatedModuleItem);
+        return res.status(200).json({
+            success: true,
+            data: updatedModuleItem
+        });
+    }
+    catch (err) {
+        console.error('Error updating programming:', error);
+        return next(new ErrorResponse('Error updating programming', 500));
+    } finally {
+        session.endSession();
+    }
+})

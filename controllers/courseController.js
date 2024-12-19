@@ -225,7 +225,17 @@ export const getCourseByInstructor = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
     }
     //console.log('Courses:', courses);
-    res.status(200).json({ success: true, data: courses, count: courses.length });
+    //res.status(200).json({ success: true, data: courses, count: courses.length });
+
+    const sortedCourses = courses.sort((a, b) =>
+        a.title.localeCompare(b.title, 'vi', { sensitivity: 'base' })
+    );
+
+    res.status(200).json({
+        success: true,
+        data: sortedCourses,
+        count: sortedCourses.length
+    });
 });
 
 // @desc      Create new course
