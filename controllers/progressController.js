@@ -22,7 +22,6 @@ const updateVideoProgress = async (req, res, next) => {
         const progress = await Progress.findById(id).populate('moduleItemProgresses.moduleItemId').session(session); // Find the progress of the user
         const module = await Module.findById(progress.moduleId).populate('moduleItems').session(session); // Find the module associated with the progress
         const videoId = progressVideo.videoId; // Extract the videoId from the request body
-        console.log(module, progress, videoId)
         // Check if the videoId exists in the module's moduleItems
         const moduleItem = module.moduleItems.find((item) => item.video.toString() === videoId)
         if (!moduleItem) throw new Error('Video not found in the module')

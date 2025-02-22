@@ -7,7 +7,7 @@ const payRouter = express.Router();
 payRouter.post("/create-payment", paymentCtrl.createPayment);
 payRouter.get("/vnpay-return", paymentCtrl.vnpayReturn);
 payRouter.get("/vnpay-ipn", paymentCtrl.vnPayIPN);
-payRouter.get("/", paymentCtrl.getPayments);
+payRouter.get("/", isLoggedin, paymentCtrl.getPayments);
 payRouter.get("/user/:userId", paymentCtrl.getPaymentsByUserId);
 payRouter.get("/:id", paymentCtrl.getPaymentById);
 

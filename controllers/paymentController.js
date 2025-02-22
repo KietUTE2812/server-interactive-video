@@ -22,8 +22,20 @@ const vnpay = new VNPay({
 // @route     GET /api/v1/payments
 // @access    Public
 const getPayments = asyncHandler(async (req, res, next) => {
-    const { fromMonth = 1, toMonth = 12, year } = req.query;
-    console.log(fromMonth, toMonth, year)
+    const { fromMonth = 1, toMonth = 12, year, userId, search } = req.query;
+    const user = req.user;
+
+    if (user.role === 'student') {
+        let payments = await Payment.find({ userId: user._id });
+        res.status(200).json({
+            success: true,
+            data: {
+                payments: payments,
+            }
+        })
+        return
+    }
+
 
     if(fromMonth > toMonth) {
         return next(new ErrorResponse('From month must be less than to month', 400));

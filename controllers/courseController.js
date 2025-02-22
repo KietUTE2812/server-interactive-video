@@ -37,7 +37,12 @@ export const getCourses = asyncHandler(async (req, res, next) => {
         filter = {
             ...filter,
             $or: [
-                { title: { $regex: search, $options: 'i' } },
+                { 
+                    title: { $regex: search, $options: 'i' }
+                },
+                {
+                    tags: { $regex: search, $options: 'i' } 
+                },
             ]
         };
 
@@ -53,7 +58,7 @@ export const getCourses = asyncHandler(async (req, res, next) => {
         }
     }
 
-    console.log('Filter:', filter);
+    console.log('Filter:', filter.$or);
     // Đếm tổng số document thỏa mãn điều kiện
     const count = await Course.countDocuments(filter);
 
@@ -76,7 +81,7 @@ export const getCourses = asyncHandler(async (req, res, next) => {
             select: 'email profile.fullName'
         })
         .populate('reviewCount')
-        .sort('createdAt')
+        .sort({ averageRating: -1 })// Sắp xếp theo số lượng review giảm dần, rating giảm dần, ngày tạo giảm dần
         .limit(page * limit > count ? count - (page - 1) * limit : limit)
         .skip((page - 1) * limit);
 
