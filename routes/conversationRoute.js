@@ -4,7 +4,7 @@ import express from 'express';
 
 const router = express.Router();
 
-router.route('/').get(protect, getConversations)
+router.route('/').get(getConversations)
 router.route('/:conversationId').get(protect, getConversation);
 router.route('/').post(protect, createConversation);
 

@@ -17,28 +17,43 @@ const ConversationSchema = new Schema({
        ref: 'User',
        required: true
     },
-    createdAt: {
-       type: Date,
-       default: Date.now
-    },
-    updatedAt: {
-       type: Date,
-       default: Date.now
-    },
-    metadata: {
-       name: {
-          type: String,
-          default: ''  // Tên nhóm (nếu là nhóm)
-       },
-       avatar: {
-          type: String,
-          default: ''  // Avatar nhóm (nếu là nhóm)
-       },
-       admins: {
-          type: [String], // Array of user IDs who are admins
-          default: []
-       }
-    }
+    courseId: {
+         type: Schema.Types.ObjectId,
+         ref: 'Course',
+         default: null
+      },
+   unReadCounts: {
+         type: Map,
+         of: Number,
+         default: {}
+   },
+   lastMessage: {
+      type: Schema.Types.ObjectId,
+      ref: 'Message',
+      default: null
+   },
+   createdAt: {
+      type: Date,
+      default: Date.now
+   },
+   updatedAt: {
+      type: Date,
+      default: Date.now
+   },
+   metadata: {
+      name: {
+         type: String,
+         default: ''  // Tên nhóm (nếu là nhóm)
+      },
+      avatar: {
+         type: String,
+         default: ''  // Avatar nhóm (nếu là nhóm)
+      },
+      admins: {
+         type: [String], // Array of user IDs who are admins
+         default: []
+      }
+   }
  });
  
  const Conversation = mongoose.model('Conversation', ConversationSchema);

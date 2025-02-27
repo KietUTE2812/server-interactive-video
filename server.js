@@ -1,7 +1,7 @@
 import http from "http";
 import app from "./app/app.js";
 import { Server } from "socket.io";
-import { handleSocketConnection } from "./config/socketHandlers.js";
+import { handleSocketConnection } from "./config/socketHandlersV2.js";
 
 const PORT = process.env.PORT || 2003
 const server = http.createServer(app);
@@ -10,7 +10,6 @@ const io = new Server(server, {
         origin: 'http://localhost:5173',
     }
 });
-
 
 handleSocketConnection(io);
 

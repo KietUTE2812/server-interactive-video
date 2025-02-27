@@ -50,6 +50,7 @@ export const handleSocketConnection = (io) => {
         socket.on('message:send', handleMessageSend);// Lưu message vào database, kiểm tra nếu đang join vào conver thì đã đọc, còn lại chưa đọc
         socket.on('conversation:out', handleConversationOut);
         socket.on('conversation:create', handleConversationCreate)
+        socket.on('conversation:check', handleConversationCheck)
         socket.on('disconnect', handleUserDisconnect); // disconection
         socket.on('conversation:recall', async ({userId}) => {
             console.log('recall:', userId);
@@ -81,6 +82,7 @@ export const handleSocketConnection = (io) => {
             
             const conversations = await getConversationsByUserId(userId);
             io.to(`user:${userId}`).emit('conversation:list', conversations);
+            console.log('User logged in:', userId);
 
             io.emit('users:online', Array.from(users.values()));
         }
@@ -98,7 +100,7 @@ export const handleSocketConnection = (io) => {
                     conversation = {...conversation, joining: []};
                 conversation.joining.push(socket.userId)
                 console.log('conversation:', conversation.joining);
-
+ 
                 if (!conversation.participants.some(p => p._id.toString() === socket.userId)) {
                     return socket.emit('error', { message: 'Not authorized to join this conversation' });
                 }
@@ -147,12 +149,14 @@ export const handleSocketConnection = (io) => {
             }
         }
         
-        async function handleConversationCreate({ participants, type='direct', name='', avatar='', admin=[] }) {
+        async function handleConversationCreate({ studentId, instructorId, courseId, type = 'direct', name = '', avatar = '', admin = [] }) {
+            const participants = [studentId, instructorId];
             try {
                 const conversation = {
                     participants,
                     conversationId: Date.now().toString(),
                     type,
+                    courseId,
                     metadata: {
                         name,
                         avatar,
@@ -162,14 +166,63 @@ export const handleSocketConnection = (io) => {
                     unreadCount: 0,
                     joining: [],
                 };
+                const existsConversation = await Conversation.findOne({participants: {$all: participants}, courseId: courseId});
+                if(existsConversation){
+                    return;
+                }
+                console.log('create conversation:', studentId, instructorId, courseId);
                 const newCon = await Conversation.create(conversation)
                 activeConversations.set(newCon._id, conversation);
                 conversation.participants.forEach(participant => {
                     io.to(`user:${participant._id}`).emit('conversation:new', newCon);
                 })
             }
-            catch(error){
+            catch(error){ 
                 console.error('Error create conversation:', error);
+            }
+        }
+        async function handleConversationCheck({ instructorId, studentId, courseId }) {
+            console.log('check conversation:', instructorId, studentId, courseId);
+            socket.join(`user:${studentId}`);
+            const participants = [instructorId, studentId];
+            try {
+                const conversation = await Conversation.findOne({participants: {$all: participants}, courseId: courseId});
+                if(conversation){
+                    io.to(`user:${studentId}`).emit('conversation:checked', {
+                        success: true,
+                        conversationId: conversation._id
+                    });
+                    console.log('conversation:', conversation);
+                }
+                else
+                    {
+                        const newCon = await Conversation.create({
+                            participants,
+                            conversationId: Date.now().toString(),
+                            type: 'direct',
+                            courseId,
+                            metadata: {
+                                name: '',
+                                avatar: '',
+                                admin: [],
+                            },
+                            lastMessage: null,
+                            unreadCount: 0,
+                            joining: [],
+                        });
+                        activeConversations.set(newCon._id, newCon);
+                        io.to(`user:${studentId}`).emit('conversation:checked', {
+                            success: true,
+                            conversationId: newCon._id
+                        });
+                        console.log('Create new conversation:', newCon.conversationId);
+                    }
+            } 
+            catch(error){
+                io.to(`user:${studentId}`).emit('conversation:checked', {
+                    success: false
+                });
+                console.error('Error check conversation:', error);
             }
         }
         async function handleMessageSend({ conversationId, content, type = MESSAGE_TYPES.TEXT }) {

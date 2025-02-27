@@ -27,6 +27,7 @@ import notificationRoute from "../routes/notificationRoute.js";
 import videoRoute from "../routes/videoRoute.js";
 import progressRoute from "../routes/progressRoute.js";
 import moduleItemRoute from "../routes/moduleItemRoute.js";
+import messageRoute from "../routes/messageRoute.js";
 
 // // Use environment variables for Redis connection
 // const redisHost = process.env.REDIS_HOST || 'localhost';
@@ -95,6 +96,7 @@ app.use('/api/v1/problem', programRoute);
 app.use('/api/v1/payments', paymentsRoute);
 app.use('/api/v1/livestreams', streamRoute);
 app.use('/api/v1/conversations', conversationRoute);
+app.use('/api/v1/messages', messageRoute);
 app.use('/api/v1/reviews', reviewRoute)
 app.use('/api/v1/quizzes', quizRoute)
 app.use('/api/v1/roadmap', roadmapRoute)
