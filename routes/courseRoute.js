@@ -6,7 +6,8 @@ import {
     updateCourse,
     approveCourse,
     getCourseByCourseId,
-    getCourseByInstructor
+    getCourseByInstructor,
+    getAllCoursebyUser
 } from "../controllers/courseController.js";
 
 // import {
@@ -56,12 +57,12 @@ const router = express.Router();
 
 // Route cho danh sách khóa học
 router.route('/')
-    .get(isLoggedin,getCourses)
+    .get(isLoggedin, getCourses)
     .post(protect, authorize('instructor', 'admin'), createCourse); //protect, authorize('instructor', 'admin'),
 router.route('/getCourseByInstructor').get(protect, authorize('instructor', 'admin'), getCourseByInstructor);
 // Route cho khóa học cụ thể
 router.route('/:id')
-    .get(isLoggedin ,getCourseById)
+    .get(isLoggedin, getCourseById)
     .put(protect, authorize('instructor', 'admin'), updateCourse) //protect, authorize('instructor', 'admin'),
 
 router.route('/enroll/:courseId').post(protect, authorize('student'), enrollCourse); // protect, authorize('student'),
@@ -148,6 +149,9 @@ router.route('/moduleitem/:moduleItemId')
 
 // router.route('/:id/modules/:moduleId/lessons/:lessonId')
 //     .get(protect, getModuleItem)
+
+router.route('/my-learning/getCourseByUser')
+    .get(protect, authorize('admin', 'student'), getAllCoursebyUser);
 
 
 
