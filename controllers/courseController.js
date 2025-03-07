@@ -5,6 +5,7 @@ import ErrorResponse from "../utils/ErrorResponse.js";
 import User from '../models/User.js';
 import mongoose from "mongoose";
 import { filter } from "async";
+import ModuleProgress from "../models/Progress.js";
 export const getCourses = asyncHandler(async (req, res, next) => {
     let { search, userId, limit, page = 1, ...otherFilters } = req.query;
     const user = req.user;
@@ -413,4 +414,66 @@ export const approveCourse = asyncHandler(async (req, res, next) => {
     await course.save()
 
     res.status(200).json({ success: true, data: course });
+});
+
+
+export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
+    const userId = req.user.id;
+    if (!userId) {
+        res.status(404);
+        throw new Error('User not found');
+    }
+    const user = await User.findById(userId).populate({
+        path: 'enrolled_courses',
+        select: '_id courseId title description level photo averageRating'
+    })
+
+    if (!user || !user.enrolled_courses) {
+        res.status(404);
+        throw new Error('No enrolled courses found');
+    }
+
+
+    const moduleProgresses = await ModuleProgress.find({
+        userId: userId
+    });
+
+    // Kết hợp thông tin khóa học với tiến trình tương ứng
+    const coursesWithProgress = user.enrolled_courses.map(course => {
+        // Lọc tất cả tiến trình của khóa học hiện tại
+        const courseProgress = moduleProgresses.filter(progress =>
+            progress.courseId.toString() === course._id.toString()
+        );
+
+        // Tính toán tiến trình tổng thể của khóa học (nếu có)
+        let overallProgress = 0;
+        if (courseProgress.length > 0) {
+            const totalCompletion = courseProgress.reduce((sum, progress) =>
+                sum + progress.completionPercentage, 0);
+            overallProgress = totalCompletion / courseProgress.length;
+        }
+        let status = "in-progress";
+        if (overallProgress === 100) {
+            status = 'completed';
+        } else {
+            status = 'in-progress';
+        }
+
+        // Trả về thông tin khóa học kèm tiến trình
+        return {
+            ...course.toObject(),
+            progress: {
+                overallPercentage: overallProgress,
+                status: status,
+                moduleDetails: courseProgress
+            }
+        };
+    });
+
+    res.status(200).json({
+        success: true,
+        count: coursesWithProgress.length,
+        data: coursesWithProgress
+    });
+
 });

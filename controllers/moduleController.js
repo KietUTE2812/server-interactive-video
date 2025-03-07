@@ -160,9 +160,10 @@ export const createModule = asyncHandler(async (req, res, next) => {
 export const updateModule = asyncHandler(async (req, res, next) => {
     const courseId = req.params.id;
     const { moduleId } = req.params;
+    console.log("request body", req.body);
 
     // Find the course
-    const course = await Course.findById(id);
+    const course = await Course.findById(courseId);
     if (!course) {
         return next(new ErrorResponse(`No found course with id ${courseId}`, 404));
     }
@@ -170,7 +171,7 @@ export const updateModule = asyncHandler(async (req, res, next) => {
     // Find all modules for the course
     const modules = await Module.find({ courseId: courseId }).populate('moduleItems');
     let moduleToUpdate = modules.find(module => module.index === moduleId);
-
+    console.log("Module to update", moduleToUpdate);
     if (!moduleToUpdate) {
         return next(new ErrorResponse(`Module not found with id of ${req.params.id}`, 404));
     }
@@ -181,16 +182,18 @@ export const updateModule = asyncHandler(async (req, res, next) => {
     }
 
     // Update the module
-    const updatedModule = await Module.findOneAndUpdate(
-        { index: moduleId },
+    const updatedModule = await Module.findByIdAndUpdate(
+        moduleToUpdate._id,
         req.body,
         {
             new: true,
             runValidators: true
         },
-        console.log("Updated module", req.body)
     );
-
+    if (!updatedModule) {
+        return next(new ErrorResponse(`Module not found with id of ${req.params.id}`, 404));
+    }
+    console.log("Updated module", updatedModule);
     res.status(200).json({
         success: true,
         data: updatedModule
@@ -204,7 +207,7 @@ export const deleteModule = asyncHandler(async (req, res, next) => {
     const courseId = req.params.id;
     const moduleId = req.params.moduleId;
     // Find course
-    const course = await Course.findById(id);
+    const course = await Course.findById(courseId);
     if (!course) {
         return next(new ErrorResponse(`No course found with id ${courseId}`, 404));
     }
