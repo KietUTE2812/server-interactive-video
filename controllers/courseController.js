@@ -6,6 +6,7 @@ import User from '../models/User.js';
 import mongoose from "mongoose";
 import { filter } from "async";
 import ModuleProgress from "../models/Progress.js";
+
 export const getCourses = asyncHandler(async (req, res, next) => {
     let { search, userId, limit, page = 1, ...otherFilters } = req.query;
     const user = req.user;
