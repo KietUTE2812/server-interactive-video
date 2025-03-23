@@ -27,8 +27,8 @@ router.route('/levels/filter')
     .get(protect, authorize('student'), searchWithLevels);
 
 // General search by search term with optional filters
-router.route('/:searchValue')
-    .get(protect, authorize('student'), searchCourseForUser);
+// router.route('/:searchValue')
+//     .get(protect, authorize('student'), searchCourseForUser);
 
 // General search with query params
 router.route('/')

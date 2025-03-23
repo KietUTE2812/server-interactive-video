@@ -3,6 +3,7 @@ import ErrorResponse from "../utils/ErrorResponse.js";
 import Course from "../models/Course.js";
 
 
+
 // @desc    Search courses for authenticated student
 // @route   GET /api/v1/search/:searchValue
 // @access  Private (student)
@@ -22,15 +23,20 @@ export const searchCourseForUser = asyncHandler(async (req, res, next) => {
 
     // Build search query
     const query = {};
-    console.log("Query value:", q);
+    console.log("Query req:", req.query);
+
     // Chỉ thêm điều kiện tìm kiếm nếu q là một chuỗi hợp lệ
+    // if (q && typeof q === 'string' && q.trim() !== '') {
+
+    //     query.$text = { $search: q };
+    // }
+
     if (q && typeof q === 'string' && q.trim() !== '') {
-        // query.$or = [
-        //     { title: { $regex: q, $options: 'i' } },
-        //     { description: { $regex: q, $options: 'i' } },
-        //     { 'instructor.name': { $regex: q, $options: 'i' } }
-        // ];
-        query.$text = { $search: q };
+        query.$or = [
+            { title: { $regex: q, $options: "i" } }, // Tìm trong title
+            { description: { $regex: q, $options: "i" } }, // Tìm trong description
+            { "instructor.name": { $regex: q, $options: "i" } } // Tìm trong instructor.name
+        ];
     }
 
     // Add filters
@@ -45,9 +51,11 @@ export const searchCourseForUser = asyncHandler(async (req, res, next) => {
     }
 
     // Add price range
-    query.price = { $gte: minPrice };
-    if (maxPrice) {
-        query.price.$lte = maxPrice;
+    if (req.query.minPrice !== undefined && req.query.maxPrice !== undefined) {
+        query.price = {
+            '$gte': parseFloat(req.query.minPrice),
+            '$lte': parseFloat(req.query.maxPrice)
+        };
     }
 
     // Add rating filter
@@ -69,14 +77,26 @@ export const searchCourseForUser = asyncHandler(async (req, res, next) => {
         sortOptions = { rating: -1 };
     } else if (sort === 'newest') {
         sortOptions = { createdAt: -1 };
-    } else if (sort === 'relevance') {
+    } else if (sort === 'relevance' && query.$text) {
         sortOptions = { score: { $meta: 'textScore' } };
     }
-    console.log("Query", query)
+    else {
+        // Mặc định sắp xếp theo điểm liên quan nếu có tìm kiếm text
+        sortOptions = { createdAt: -1 };
+    }
+
+    console.log(JSON.stringify(query, null, 2));
     const courses = await Course.find(query)
         .sort(sortOptions)
         .limit(limit)
         .skip(startIndex);
+
+    const results = await Course.find(query)
+        .limit(limit)
+        .skip((page - 1) * limit);
+    console.log("Results count:", results.length);
+    console.log("First result:", results[0]);
+    console.log("course: ", courses.length);
 
     const pagination = {};
     if (endIndex < total) {
@@ -99,7 +119,7 @@ export const searchCourseForUser = asyncHandler(async (req, res, next) => {
         count: courses.length,
         pagination,
         totalPages,
-        data: courses
+        courses: courses
     });
 });
 
