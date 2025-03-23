@@ -1,38 +1,34 @@
 ﻿import OpenAI from "openai";
 import dotenv from "dotenv";
-
+import Agent from "./OpenAIAgent.js";
 dotenv.config();
-const client = new OpenAI({
-    baseURL: "https://api-inference.huggingface.co/v1/",
-    apiKey: "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"
-})
-let out = "";
-async function generateRoadmap(prompt) {
-    try {
-        const stream = await client.chat.completions.create({
-            model: "Qwen/Qwen2.5-Coder-32B-Instruct",
-            messages: [
-                { role: "user", content: prompt },
-            ],
-            temperature: 0.5,
-            max_tokens: 2048,
-            top_p: 0.7,
-            stream: true,
-        });
-        out = "";
-        for await (const chunk of stream) {
-            if (chunk.choices && chunk.choices.length > 0) {
-                const newContent = chunk.choices[0].delta.content;
-                out += newContent;
-            }
-        }
 
-        return extractJSONFromString(out)
+const apiKey = process.env.OPENAI_KEY;
+const url = "https://openrouter.ai/api/v1";
+const model = "qwen/qwen-2.5-coder-32b-instruct:free";
+
+const agent = new Agent(); // Tạo một instance của Agent để sử dụng AI API
+agent.config(null, url, apiKey);
+
+async function generateRoadmap(prompt) {
+    console.log("Generating roadmap");
+    try {
+        const response = await agent.generate(prompt, 2048, 0.7, true, "JSON Object");
+        console.log("Response:", response);
+        const jsonData = JSON.parse(response);
+        return {
+            success: true,
+            data: jsonData
+        }
     } catch (error) {
         console.error("Error generating roadmap:", error);
-        throw error; // Bắt và xử lý lỗi nếu có
+        return {
+            success: false,
+            error: error.message || "Unknown error"
+        };
     }
 }
+    
 function extractJSONFromString(text) {
     try {
         // Tìm vị trí bắt đầu và kết thúc của JSON
@@ -66,28 +62,17 @@ function extractJSONFromString(text) {
 const generateChartCode = async (prompt) =>
 {
     try {
-        const stream = await client.chat.completions.create({
-            model: "Qwen/Qwen2.5-Coder-32B-Instruct",
-            messages: [
-                { role: "user", content: prompt },
-            ],
-            temperature: 0.5,
-            max_tokens: 2048,
-            top_p: 0.7,
-            stream: true,
-        });
-        out = "";
-        for await (const chunk of stream) {
-            if (chunk.choices && chunk.choices.length > 0) {
-                const newContent = chunk.choices[0].delta.content;
-                out += newContent;
-            }
+        const response = await agent.generate(prompt, 2048, 0.7, true, "Mermaid Chart Code");
+        return {
+            success: true,
+            data: response
         }
-
-        return extractMermaidChart(out);
     } catch (error) {
-        console.error("Error generating chart code:", error);
-        throw error; // Bắt và xử lý lỗi nếu có
+        console.error("Error generating roadmap:", error);
+        return {
+            success: false,
+            error: error.message || "Unknown error"
+        };
     }
 }
 

@@ -1,6 +1,134 @@
 ﻿import mongoose from 'mongoose';
 const Schema = mongoose.Schema;
 
+// Schema cho các câu hỏi trong bài test
+const TestQuestionSchema = new Schema({
+    question: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    options: {
+        type: [{
+            _id: false,
+            text: {
+                type: String,
+                required: true,
+                trim: true
+            },
+            isCorrect: {
+                type: Boolean,
+                default: false
+            }
+        }],
+    },
+    type: {
+        type: String,
+        enum: ['single-choice','multiple-choice'], // True/false will be treated as single-choice 
+        default: 'multiple-choice'
+    },
+    explanation: {
+        type: String,
+        trim: true,
+        default: ''
+    },
+    points: {
+        type: Number,
+        default: 1,
+        min: 0
+    }
+}, { _id: true });
+
+// Schema cho bài test của mỗi item
+const RoadmapItemTestSchema = new Schema({
+    itemId: {
+        type: String,
+        required: true
+    },
+    title: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    description: {
+        type: String,
+        trim: true
+    },
+    questions: [TestQuestionSchema],
+    passingScore: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    timeLimit: {
+        type: Number, // Thời gian giới hạn tính bằng phút
+        min: 0
+    },
+    status: {
+        type: String,
+        enum: ['active', 'draft'],
+        default: 'active'
+    }
+}, {
+    timestamps: true
+});
+
+const UserTestResultAttemptSchema = new Schema({
+    attemptNumber: {
+        type: Number,
+        default: 1
+    },
+    score: {
+        type: Number,
+        required: true
+    },
+    passed: {
+        type: Boolean,
+        required: true
+    },
+    answers: [{
+        questionId: {
+            type: Schema.Types.ObjectId,
+            required: true
+        },
+        selectedOptions: [{
+            type: Number, // Index của option trong mảng options
+        }],
+        isCorrect: {
+            type: Boolean
+        }
+    }],
+    completedAt: {
+        type: Date,
+        default: Date.now
+    },
+    timeTaken: {
+        type: Number,
+        required: true
+    }
+});
+// Schema cho kết quả làm bài test của người dùng
+const UserTestResultSchema = new Schema({
+    userId: {
+        type: Schema.Types.ObjectId,
+        required: true,
+        ref: 'User'
+    },
+    testId: {
+        type: Schema.Types.ObjectId,
+        required: true,
+        ref: 'RoadmapItemTest'
+    },
+    passed: {
+        type: Boolean,
+        required: true
+    },
+    attempts: [UserTestResultAttemptSchema],
+}, {
+    timestamps: true
+});
+
+
 // Schema for individual items in a phase
 const RoadmapItemSchema = new Schema({
     name: {
@@ -21,7 +149,19 @@ const RoadmapItemSchema = new Schema({
     order: {
         type: Number,
         required: true
-    }
+    },
+    test: {
+        type: Schema.Types.ObjectId,
+        ref: 'RoadmapItemTest',
+        default: null,
+        required: false
+    },
+    userTestResults: {
+        type: Schema.Types.ObjectId,
+        ref: 'UserTestResult',
+        default: null,
+        required: false
+    },
 }, { _id: true });
 
 // Schema for phases
@@ -116,9 +256,6 @@ RoadmapSchema.virtual('progress').get(function() {
     return totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
 });
 
-// Index for better search performance
-RoadmapSchema.index({ title: 'text', description: 'text', tags: 'text' });
-
 // Pre-save middleware to calculate estimatedTimeInMonths
 RoadmapSchema.pre('save', function(next) {
     if (this.phases.length) {
@@ -127,6 +264,20 @@ RoadmapSchema.pre('save', function(next) {
     next();
 });
 
-const Roadmap = mongoose.model('Roadmap', RoadmapSchema);
+// Update Phase when all item is marked as completed
+RoadmapSchema.pre('save', function(next) {
+    this.phases.forEach(phase => {
+        if (phase.items.length && phase.items.every(item => item.completed)) {
+            phase.status = 'completed';
+            phase.endDate = Date.now();
+        }
+    });
+    next();
+});
 
-export default Roadmap;
+
+const Roadmap = mongoose.model('Roadmap', RoadmapSchema);
+const RoadmapItemTest = mongoose.model('RoadmapItemTest', RoadmapItemTestSchema);
+const UserTestResult = mongoose.model('UserTestResult', UserTestResultSchema);
+
+export default {Roadmap, RoadmapItemTest, UserTestResult};

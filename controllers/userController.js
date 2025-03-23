@@ -326,6 +326,7 @@ const loginUserCtrl = asyncHandler(async (req, res, next) => {
                     httpOnly: true,
                     maxAge: 3 * 24 * 60 * 60 * 1000
                 });
+                
                 res.json({
                     status: "success",
                     message: "Login successfully",
