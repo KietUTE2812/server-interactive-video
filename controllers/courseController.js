@@ -19,6 +19,7 @@ export const getCourses = asyncHandler(async (req, res, next) => {
 
     // Khởi tạo object filter cơ bản
     let filter = { status: 'published', ...otherFilters };
+    delete filter.orderBy;
     if (otherFilters.tags) {
         otherFilters.tags = otherFilters.tags.split(',');
     }
@@ -66,7 +67,7 @@ export const getCourses = asyncHandler(async (req, res, next) => {
     const courses = await Course.find(filter)
         .populate({
             path: 'instructor',
-            select: 'email profile.fullName'
+            select: 'email profile'
         })
         .populate({
             path: 'modules',
@@ -81,9 +82,10 @@ export const getCourses = asyncHandler(async (req, res, next) => {
             select: 'email profile.fullName'
         })
         .populate('reviewCount')
-        .sort({ averageRating: -1 })// Sắp xếp theo số lượng review giảm dần, rating giảm dần, ngày tạo giảm dần
+        .sort(otherFilters.orderBy == 'newest' ? { created_at: -1 } : { averageRating : -1 })// Sắp xếp theo số lượng review giảm dần, rating giảm dần, ngày tạo giảm dần
         .limit(page * limit > count ? count - (page - 1) * limit : limit)
-        .skip((page - 1) * limit);
+        .skip((page - 1) * limit)
+        ;
 
     res.status(200).json({
         success: true,
