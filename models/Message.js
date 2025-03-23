@@ -5,11 +5,11 @@ const MessageSchema = new Schema({
     messageId: {
        type: String,
        required: true,
-       unique: true
+       unique: true,
+       default: () => `MSG-${Date.now()}-${Math.floor(Math.random() * 10000)}` // Unique message ID
     },
     conversationId: {
-       type: Schema.Types.ObjectId,
-       ref: 'Conversation',
+       type: String,
        required: true,
     },
     senderId: {
