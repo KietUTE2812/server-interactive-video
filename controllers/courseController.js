@@ -6,6 +6,7 @@ import User from '../models/User.js';
 import mongoose from "mongoose";
 import { filter } from "async";
 import ModuleProgress from "../models/Progress.js";
+
 export const getCourses = asyncHandler(async (req, res, next) => {
     let { search, userId, limit, page = 1, ...otherFilters } = req.query;
     const user = req.user;
@@ -430,8 +431,13 @@ export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
     }
     const user = await User.findById(userId).populate({
         path: 'enrolled_courses',
-        select: '_id courseId title description level photo averageRating'
-    })
+        select: '_id price courseId title description level photo averageRating courseReviews instructor',
+        populate: {
+            path: 'instructor', // Lấy thông tin giảng viên từ khóa học
+            select: '_id fullname email profile'
+        }
+    });
+
 
     if (!user || !user.enrolled_courses) {
         res.status(404);
