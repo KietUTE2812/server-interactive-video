@@ -40,11 +40,11 @@ export const getCourses = asyncHandler(async (req, res, next) => {
         filter = {
             ...filter,
             $or: [
-                { 
+                {
                     title: { $regex: search, $options: 'i' }
                 },
                 {
-                    tags: { $regex: search, $options: 'i' } 
+                    tags: { $regex: search, $options: 'i' }
                 },
             ]
         };
@@ -84,7 +84,7 @@ export const getCourses = asyncHandler(async (req, res, next) => {
             select: 'email profile.fullName'
         })
         .populate('reviewCount')
-        .sort(otherFilters.orderBy == 'newest' ? { created_at: -1 } : { averageRating : -1 })// Sắp xếp theo số lượng review giảm dần, rating giảm dần, ngày tạo giảm dần
+        .sort(otherFilters.orderBy == 'newest' ? { created_at: -1 } : { averageRating: -1 })// Sắp xếp theo số lượng review giảm dần, rating giảm dần, ngày tạo giảm dần
         .limit(page * limit > count ? count - (page - 1) * limit : limit)
         .skip((page - 1) * limit)
         ;
@@ -169,6 +169,8 @@ export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
 // @route   GET /api/courses/:id query: {userId}
 export const getCourseById = asyncHandler(async (req, res) => {
     const userId = req.user._id;
+    const courseID = req.params.id;
+    console.log('Course ID:', courseID);
     const user = await User.findById(userId);
     if (!user) {
         res.status(404);
@@ -184,17 +186,22 @@ export const getCourseById = asyncHandler(async (req, res) => {
     }).populate({
         path: 'approvedBy',
         select: 'email profile'
-    })
-        .populate('reviewCount');
+    }).populate({
+        path: 'instructor',
+        select: 'email profile'
+    }).populate('reviewCount');
     if (!course) {
         res.status(404);
         throw new Error('Course not found');
     }
-    const instructor = await User.findById(course.instructor).select('profile');
+    const enrollments = await User.countDocuments({ enrolled_courses: courseID });
+    console.log('Enrollments:', enrollments);
+    const instructor = await User.findById(course.instructor).select('email profile');
     if (course && user.enrolled_courses.includes(course._id)) {
 
         res.json({
             isEnrolled: true,
+            enrollments: enrollments,
             data: {
                 ...course._doc,
                 instructor: instructor
@@ -209,6 +216,8 @@ export const getCourseById = asyncHandler(async (req, res) => {
             }
         });
     }
+
+
 });
 export const getCourseByInstructor = asyncHandler(async (req, res, next) => {
     const courses = await Course.find({ instructor: req.user._id })
