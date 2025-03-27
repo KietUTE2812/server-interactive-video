@@ -58,12 +58,18 @@ const router = express.Router();
 // Route cho danh sách khóa học
 router.route('/')
     .get(isLoggedin, getCourses)
-    .post(protect, authorize('instructor', 'admin'), createCourse); //protect, authorize('instructor', 'admin'),
+    .post(protect,
+        authorize('instructor', 'admin'),
+        upload.single('sumaryVideo'),
+        createCourse); //protect, authorize('instructor', 'admin'),
 router.route('/getCourseByInstructor').get(protect, authorize('instructor', 'admin'), getCourseByInstructor);
 // Route cho khóa học cụ thể
 router.route('/:id')
     .get(isLoggedin, getCourseById)
-    .put(protect, authorize('instructor', 'admin'), updateCourse) //protect, authorize('instructor', 'admin'),
+    .put(protect,
+        authorize('instructor', 'admin'),
+        upload.single('sumaryVideo'),
+        updateCourse) //protect, authorize('instructor', 'admin'),
 
 router.route('/enroll/:courseId').post(protect, authorize('student'), enrollCourse); // protect, authorize('student'),
 

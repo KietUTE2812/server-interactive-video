@@ -6,6 +6,7 @@ import User from '../models/User.js';
 import mongoose from "mongoose";
 import { filter } from "async";
 import ModuleProgress from "../models/Progress.js";
+import minioClient from "../config/minioClient.js";
 
 export const getCourses = asyncHandler(async (req, res, next) => {
     let { search, userId, limit, page = 1, ...otherFilters } = req.query;
@@ -281,7 +282,11 @@ export const createCourse = asyncHandler(async (req, res, next) => {
 // @route     PUT /api/v1/courses/:id
 // @access    Private
 export const updateCourse = asyncHandler(async (req, res, next) => {
+    console.log("video updated: ", req.file)
+    console.log("course data: ", req.body)
+
     let course = await Course.findById(req.params.id);
+    let urlVideo = "";
 
     if (!course) {
         return next(new ErrorResponse(`Course not found with id of ${req.params.id} err `, 404));
@@ -291,13 +296,47 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
     if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
         return next(new ErrorResponse(`User ${req.user.id} is not authorized to update this course`, 401));
     }
+    // if (!req.file) {
+    //     return next(new ErrorResponse('Please provide a file', 400));
+    // }
 
     // Bắt đầu session để đảm bảo tính nhất quán của dữ liệu
     const session = await mongoose.startSession();
     session.startTransaction();
+
+    if (req.file) {
+        const bucketName = process.env.MINIO_BUCKET_NAME;
+        const objectName = `${Date.now()}-${req.file.originalname}`;
+        try {
+            const bucketExists = await minioClient.bucketExists(bucketName);
+            if (!bucketExists) {
+                await minioClient.makeBucket(bucketName, 'us-east-1');
+            }
+
+            await minioClient.putObject(
+                bucketName,
+                objectName,
+                req.file.buffer,
+                req.file.size,
+                { 'Content-Type': req.file.mimetype }
+            );
+        } catch (minioError) {
+            await session.abortTransaction();
+            console.error('MinIO upload error:', minioError);
+            return next(new ErrorResponse('Error uploading file', 500));
+        }
+        urlVideo = `${process.env.MINIO_URL}/${objectName}`.toString();
+    }
     try {
+
         // Cập nhật thông tin course
-        const courseData = { ...req.body };
+        console.log("video url: ", urlVideo)
+        const courseData = {
+            ...req.body,
+            sumaryVideo: urlVideo
+        };
+        console.log("🔥 course data", courseData);
+
         //console.log("course updated1: ", courseData)
         delete courseData.modules; // Xóa modules khỏi courseData để tránh cập nhật trực tiếp
 
