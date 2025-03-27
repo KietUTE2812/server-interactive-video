@@ -69,6 +69,9 @@ const CourseSchema = new Schema({
         type: String,
         default: 'https://res.cloudinary.com/dgbp29tck/image/upload/v1729536960/course_b1auye.jpg'
     },
+    sumaryVideo: {
+        type: String
+    },
     enrollmentCount: {
         type: Number,
         default: 0
