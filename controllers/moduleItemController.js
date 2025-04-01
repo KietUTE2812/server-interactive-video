@@ -10,6 +10,10 @@ import File from '../models/File.js';
 import dotenv from 'dotenv';
 import minioClient from '../config/minioClient.js';
 
+import processAIResponse from '../utils/generatePromt.js';
+import GeminiAI from '../utils/GeminiAI.js';
+
+
 
 // Module Items
 
@@ -564,6 +568,7 @@ export const editLectureByItemId = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse('Please provide a file', 400));
     }
     console.log("test", req.file);
+    console.log("questions", questions);
     const maxRetries = 3;
     let retryCount = 0;
 
@@ -607,12 +612,29 @@ export const editLectureByItemId = asyncHandler(async (req, res, next) => {
             // }
 
             const questionsArray = Array.isArray(questions) ? questions : [questions];
-            const validQuestions = questionsArray
+            console.log("questionsArray", questionsArray);
+            // const validQuestions = questionsArray
+            //     .filter(q => q.index !== null && q.question !== null && q.answers?.length > 0)
+            //     .map(q => ({
+            //         ...q,
+            //         answers: q.answers.filter(a => a.content !== null && a.isCorrect !== null)
+            //     }));
+
+            const parsedQuestionsArray = questionsArray.flatMap(q =>
+                typeof q === "string" ? JSON.parse(q) : q
+            );
+
+            const validQuestions = parsedQuestionsArray
                 .filter(q => q.index !== null && q.question !== null && q.answers?.length > 0)
                 .map(q => ({
                     ...q,
                     answers: q.answers.filter(a => a.content !== null && a.isCorrect !== null)
                 }));
+
+            console.log("Parsed Questions Array:", parsedQuestionsArray);
+
+
+            console.log("Array question ", validQuestions);
             const url = `${process.env.MINIO_URL}/${objectName}`;
             const videoData = {
                 file: url.toString(),
@@ -625,6 +647,7 @@ export const editLectureByItemId = asyncHandler(async (req, res, next) => {
                 await session.abortTransaction();
                 return next(new ErrorResponse(`No found module item with id ${itemId}`, 404));
             }
+            console.log("videoData", videoData);
 
             const video = await Video.findByIdAndUpdate(
                 moduleItem.video,
@@ -864,3 +887,134 @@ export const editProgrammingByItemId = asyncHandler(async (req, res, next) => {
         session.endSession();
     }
 })
+
+
+export const createNewInteractiveQuestion = asyncHandler(async (req, res, next) => {
+    const currQuestion = req.body;
+    const videoId = req.query.videoId;
+    const userId = req.user.id;
+    const selectedAnswer = req.query.selectedAnswer;
+    //console.log("currQuestion", currQuestion.question);
+    //console.log("selectedAnswer", selectedAnswer);
+    // console.log("videoId", videoId);
+    if (!currQuestion) {
+        return next(new ErrorResponse('Please provide valid question data', 400));
+    }
+    if (!videoId) {
+        return next(new ErrorResponse('Please provide videoId', 400));
+    }
+    if (!selectedAnswer) {
+        return next(new ErrorResponse('Please provide selectedAnswer', 400));
+    }
+    updateHistoryAnswer(currQuestion, videoId, selectedAnswer, false, userId)
+
+
+    const video = await Video.findById(videoId);
+    if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+    }
+    const question = video.questions.id(currQuestion._id);
+    if (!question) {
+        return res.status(404).json({ message: "Question not found" });
+    }
+
+    const historyAns = question.history.filter(ans => ans.userId.toString() === userId.toString())
+        .map(ans => ({
+            question: ans.question,
+            answer: ans.answer,
+            isCorrect: ans.isCorrect,
+        }))
+
+    //console.log("historyAns", historyAns);
+    const prompt = generatePrompt(currQuestion, selectedAnswer, historyAns);
+    //console.log("prompt", prompt);
+    const result = await GeminiAI(prompt);
+    console.log("result", result);
+    if (result.error) {
+        return res.status(500).json({ message: result.error });
+    }
+    const quesId = currQuestion._id;
+    const formatResponse = processAIResponse(result, quesId);
+    console.log("formatResponse", formatResponse);
+
+    return res.status(200).json({
+        success: true,
+        data: formatResponse
+    });
+
+})
+
+async function updateHistoryAnswer(currQuestion, videoId, selectedAnswer, isCorrect, userId) {
+
+    const video = await Video.findById(videoId);
+    if (!video) {
+        return res.status(404).json({ message: "Video not found" });
+    }
+    const question = video.questions.id(currQuestion._id);
+    if (!question) {
+        return res.status(404).json({ message: "Question not found" });
+    }
+
+    const ans = question.answers
+        .filter(ans => selectedAnswer.includes(ans._id.toString()))
+        .map(ans => ans.content);
+    //console.log("ans", ans);
+    question.history.push({
+        userId,
+        question: question.question,
+        answer: ans,
+        isCorrect: isCorrect,
+        timestamp: new Date()
+    });
+    await video.save();
+
+}
+function generatePrompt(currQuestion, selectedAnswer, historyAns) {
+    // Extract question information
+    const { question, questionType, answers } = currQuestion;
+
+    // Get the correct answer
+    const correctAnswer = answers.find(ans => ans.isCorrect)?.content || "Undefined answer";
+
+    // Get the list of incorrect answers, formatted as bullet points
+    const incorrectAnswers = answers
+        .filter(ans => !ans.isCorrect)
+        .map(ans => `- "${ans.content}"`)
+        .join("\n");
+
+    // Get the answer that the user selected
+    const selectedAnswerText = answers.find(ans => ans._id === selectedAnswer[0])?.content || "Undefined answer";
+
+    // Check if the selected answer is correct
+    const isSelectedCorrect = answers.find(ans => ans._id === selectedAnswer[0])?.isCorrect || false;
+    const correctnessMsg = isSelectedCorrect ? "**correct**" : "**incorrect**";
+
+    // Construct the prompt with clear sections and instructions
+    return `As a programming instructor, create a new multiple-choice question in the "${questionType}" format.  
+
+The new question should be similar in content to the following:  
+"${question}"  
+
+Additional information:  
+- Correct answer in the original question: "${correctAnswer}"  
+- Incorrect answers in the original question:  
+${incorrectAnswers}  
+
+The user selected: "${selectedAnswerText}", but this answer is ${correctnessMsg}.
+
+The history answer for this question is:
+${JSON.stringify(historyAns, null, 2)}
+
+Please generate a new question that tests knowledge on the same topic but uses a different context or rephrased wording.
+The new question should maintain these characteristics:
+${JSON.stringify(currQuestion, null, 2)}
+
+Ensure the new question:
+1. Tests the same programming concept in a different way
+2. Is not too similar to any questions in the history
+3. Maintains the appropriate difficulty level
+4. Includes clear explanations for both correct and incorrect answers`;
+}
+
+
+

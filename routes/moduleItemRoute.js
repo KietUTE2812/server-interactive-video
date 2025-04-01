@@ -5,7 +5,7 @@ import { isLoggedin } from "../middlewares/isLoggedin.js";
 import { authorize, protect } from "../middlewares/auth.js";
 import upload from "../middlewares/upload.js";
 import { getModuleById } from "../controllers/moduleController.js"
-import { editLectureByItemId, editProgrammingByItemId, editQuizByItemId, editSupplementByItemId } from "../controllers/moduleItemController.js";
+import { createNewInteractiveQuestion, editLectureByItemId, editProgrammingByItemId, editQuizByItemId, editSupplementByItemId } from "../controllers/moduleItemController.js";
 
 const router = express.Router();
 
@@ -21,6 +21,13 @@ router.route('/lecture/:itemId')
         authorize('instructor', 'admin'),
         upload.single('file'),
         editLectureByItemId);
+
+router.route('/lecture/:itemId/interactive')
+    .post(
+        protect,
+        authorize('instructor', 'student', 'admin'),
+        createNewInteractiveQuestion);
+
 
 
 router.route('/quiz/:itemId')

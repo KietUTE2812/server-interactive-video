@@ -46,7 +46,7 @@ const ModuleItemSchema = new Schema({
         ref: 'Quiz',
     },
     programming: {
-        type: mongoose.Schema.Types.ObjectId, 
+        type: mongoose.Schema.Types.ObjectId,
         ref: 'ProgramProblem',
     },
     assignment: [{
@@ -89,9 +89,31 @@ const VideoSchema = new Schema({
                     type: Boolean,
                     default: false
                 }
+            }],
+            history: [{
+                userId: {
+                    type: mongoose.Schema.Types.ObjectId,
+                    ref: 'User'
+                },
+                question: {
+                    type: String,
+                },
+                answer: [{
+                    type: String,
+                    trim: true,
+                }],
+                isCorrect: {
+                    type: Boolean,
+                    default: false
+                },
+                timestamp: {
+                    type: Date,
+                    default: Date.now
+                }
             }]
         }
-    ]
+    ],
+
 }, {
     timestamps: true,
     autoIndex: false // Disable auto indexing
