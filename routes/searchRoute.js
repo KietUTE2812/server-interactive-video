@@ -1,26 +1,27 @@
 import express from 'express';
 import {
     searchCourseForUser,
-    searchWithCategories,
+    searchWithTags,
     searchWithLevels,
-    getCategories,
-    getLevels
+    getTags,
+    getLevels,
+    fetchCourses
 } from "../controllers/searchController.js";
 import { protect, authorize } from "../middlewares/auth.js";
 
 const router = express.Router();
 
-// Route to get all categories - used for quick filtering options
-router.route('/categories')
-    .get(protect, authorize('student'), getCategories);
+// Route to get all Tags - used for quick filtering options
+router.route('/tags')
+    .get(protect, authorize('student'), getTags);
 
 // Route to get all levels - used for quick filtering options
 router.route('/levels')
     .get(protect, authorize('student'), getLevels);
 
-// Search with categories as filter
-router.route('/categories/filter')
-    .get(protect, authorize('student'), searchWithCategories);
+// Search with Tags as filter
+router.route('/tags/filter')
+    .get(protect, authorize('student'), searchWithTags);
 
 // Search with levels as filter
 router.route('/levels/filter')
@@ -33,5 +34,9 @@ router.route('/levels/filter')
 // General search with query params
 router.route('/')
     .get(protect, authorize('student'), searchCourseForUser);
+
+
+router.route('/fetchCourses')
+    .get(protect, authorize('student'), fetchCourses);
 
 export default router;

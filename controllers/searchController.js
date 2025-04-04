@@ -11,7 +11,7 @@ export const searchCourseForUser = asyncHandler(async (req, res, next) => {
     const { searchValue } = req.params;
     const {
         q,
-        categories,
+        tags,
         levels,
         minPrice = 0,
         maxPrice,
@@ -40,8 +40,8 @@ export const searchCourseForUser = asyncHandler(async (req, res, next) => {
     }
 
     // Add filters
-    if (categories) {
-        const categoryArray = categories.split(',');
+    if (tags) {
+        const categoryArray = tags.split(',');
         query.category = { $in: categoryArray };
     }
 
@@ -130,15 +130,15 @@ export const searchWithLevels = asyncHandler(async (req, res, next) => {
     })
 });
 
-export const searchWithCategories = asyncHandler(async (req, res, next) => {
-    console.log("Search course with categories")
+export const searchWithTags = asyncHandler(async (req, res, next) => {
+    console.log("Search course with Tags")
     res.status(200).json({
         message: "Successfully"
     })
 });
 
-export const getCategories = asyncHandler(async (req, res, next) => {
-    console.log("Get all categories")
+export const getTags = asyncHandler(async (req, res, next) => {
+    console.log("Get all Tags")
     res.status(200).json({
         message: "Successfully"
     })
@@ -150,3 +150,56 @@ export const getLevels = asyncHandler(async (req, res, next) => {
         message: "Successfully"
     })
 });
+
+export const fetchCourses = asyncHandler(async (req, res, next) => {
+    console.log("Get all courses by user");
+    try {
+        const { page = 1, limit = 10 } = req.query;
+        const pageNumber = parseInt(page);
+        const limitNumber = parseInt(limit);
+
+        // Kiểm tra giá trị hợp lệ
+        if (isNaN(pageNumber) || isNaN(limitNumber) || pageNumber < 1 || limitNumber < 1) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid page or limit parameter"
+            });
+        }
+
+        // Calculate skip value for pagination
+        const skip = (pageNumber - 1) * limitNumber;
+
+        // Log để debug
+        console.log(`Page: ${pageNumber}, Limit: ${limitNumber}, Skip: ${skip}`);
+
+        // Assuming you have a Course model
+        const courses = await Course.find()
+            .skip(skip)
+            .limit(limitNumber)
+            .sort({ createdAt: -1 });
+
+        // Log để debug số lượng kết quả trả về
+        console.log(`Courses found: ${courses.length}`);
+
+        // Get total count for pagination info
+        const totalCount = await Course.countDocuments();
+
+        res.status(200).json({
+            success: true,
+            data: {
+                courses,
+                currentPage: pageNumber,
+                totalPages: Math.ceil(totalCount / limitNumber),
+                totalCount
+            },
+            message: "Courses fetched successfully"
+        });
+    } catch (error) {
+        console.error("Error fetching courses:", error);
+        res.status(500).json({
+            success: false,
+            message: "Failed to fetch courses",
+            error: error.message
+        });
+    }
+}); 
