@@ -13,8 +13,7 @@ agent.config(null, url, apiKey);
 async function generateRoadmap(prompt) {
     console.log("Generating roadmap");
     try {
-        const response = await agent.generate(prompt, 2048, 0.7, true, "JSON Object");
-        console.log("Response:", response);
+        const response = await agent.generate(prompt, 2048, 1, false, "JSON");
         const jsonData = JSON.parse(response);
         return {
             success: true,

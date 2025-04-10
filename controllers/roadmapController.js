@@ -291,31 +291,33 @@ const createTest = asyncHandler(async (req, res, next) => {
 
 const getRoadmaps = asyncHandler(async (req, res, next) => {
     const filter = req.query;
-    let roadmap = null
+    let roadmaps = null
     if (filter.userId)
-        roadmap = await Roadmap.findOne({ creator: filter.userId });
+        roadmaps = await Roadmap.find({ creator: filter.userId });
     else if (filter != {})
-        roadmap = await Roadmap.find(filter);
-    if (!roadmap) {
+        roadmaps = await Roadmap.find(filter);
+    if (!roadmaps) {
         return next(new ErrorResponse(`Roadmap not found`, 404));
     }
     // Delete the test data
     // Xóa dữ liệu test để tránh lộ đáp án
-    const cleanRoadmap = JSON.parse(JSON.stringify(roadmap)); // Clone object để tránh ảnh hưởng DB
-    cleanRoadmap.phases.forEach(phase => {
-        phase.items.forEach(item => {
-            if (item.test && item.test.questions) {
-                item.test.questions.forEach(question => {
-                    delete question.explanation;
-                    question.options.forEach(option => {
-                        delete option.isCorrect;
+    roadmaps = roadmaps.map(roadmap => {
+        const cleanRoadmap = JSON.parse(JSON.stringify(roadmap)); // Clone object để tránh ảnh hưởng DB
+        cleanRoadmap.phases.forEach(phase => {
+            phase.items.forEach(item => {
+                if (item.test && item.test.questions) {
+                    item.test.questions.forEach(question => {
+                        delete question.explanation;
+                        question.options.forEach(option => {
+                            delete option.isCorrect;
+                        });
                     });
-                });
-            }
+                }
+            });
         });
-    });
-    console.log(cleanRoadmap.phases[0].items[0].test);
-    res.json({ success: true, data: cleanRoadmap });
+        return cleanRoadmap;
+    })
+    res.json({ success: true, data: roadmaps });
 })
 
 const submitTest = asyncHandler(async (req, res, next) => {
@@ -428,7 +430,7 @@ const updateRoadmap = asyncHandler(async (req, res, next) => {
     }
     const data = req.body;
     console.log(data);
-    roadmap.set(data.roadmap);
+    roadmap.set(data);
     await roadmap.save();
     res.json({ success: true, data: roadmap });
 });
