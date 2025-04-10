@@ -243,15 +243,14 @@ const RoadmapSchema = new Schema({
 
 // Virtual for total progress
 RoadmapSchema.virtual('progress').get(function() {
-    if (!this.phases.length) return 0;
+    let completedItems = 0, totalItems = 0;
 
-    const completedItems = this.phases.reduce((acc, phase) => {
-        return acc + phase.items.filter(item => item.completed).length;
-    }, 0);
-
-    const totalItems = this.phases.reduce((acc, phase) => {
-        return acc + phase.items.length;
-    }, 0);
+    this.phases.forEach(phase => {
+        phase.items.forEach(item => {
+            totalItems++;
+            if (item.completed) completedItems++;
+        });
+    });
 
     return totalItems ? Math.round((completedItems / totalItems) * 100) : 0;
 });

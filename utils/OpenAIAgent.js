@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 class Agent {
-    model = 'deepseek/deepseek-r1-zero:free';
+    model = 'qwen/qwen-2.5-coder-32b-instruct:free';
     url = 'https://openrouter.ai/api/v1'
     apiKey = process.env.OPENAI_KEY;
     client = new OpenAI({
@@ -28,7 +28,8 @@ class Agent {
                 messages: [
                     {
                         role: "system",
-                        content: `You are a backend AI assistant. Always return a valid ${return_type || this.return_type}  as the response. Do not include any explanations, reasoning, or additional text.`
+                        content: `You are a backend AI assistant. Return a compact ${return_type || 'JSON'} with no unnecessary whitespace or newlines.
+                        `
                     },
                     { role: "user", content: prompt },
                 ],
@@ -37,12 +38,17 @@ class Agent {
                 stream: stream
             });
             let out = "";
-            for await (const chunk of response) {
-                if (chunk.choices?.[0]?.delta?.content) {
-                    out += chunk.choices[0].delta.content;
+
+            if (stream && response[Symbol.asyncIterator]) {
+                for await (const chunk of response) {
+                    if (chunk.choices?.[0]?.delta?.content) {
+                        out += chunk.choices[0].delta.content;
+                    }
                 }
+            } else {
+                out = response?.choices?.[0]?.message?.content || "";
             }
-            
+            console.log("Response:", out);
             return out;
         }
         catch (error) {
@@ -50,6 +56,26 @@ class Agent {
             throw error;
         }
     }
+    extractJSONFromString(text) {
+        try {
+            const jsonMatch = text.match(/\{[\s\S]*\}/); // Tìm JSON trong chuỗi
+            if (!jsonMatch) {
+                throw new Error("Không tìm thấy JSON hợp lệ trong phản hồi.");
+            }
+    
+            return {
+                success: true,
+                data: JSON.parse(jsonMatch[0]) // Parse JSON từ kết quả tìm được
+            };
+        } catch (error) {
+            return {
+                success: false,
+                message: error.message,
+                error: error
+            };
+        }
+    }
+    
 }
 
 export default Agent;
