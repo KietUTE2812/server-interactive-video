@@ -14,6 +14,12 @@ const ModuleItemProgressSchema = new Schema({
         enum: ['not-started', 'in-progress', 'completed'],
         default: 'not-started'
     },
+    completionPercentage: {
+        type: Number,
+        default: 0,
+        min: 0,
+        max: 100
+    },
     // Thời gian bắt đầu làm
     startedAt: {
         type: Date

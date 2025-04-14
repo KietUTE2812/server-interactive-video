@@ -15,7 +15,7 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_KEY);
 
 async function GeminiAI(prompt) {
     try {
-        console.log("API Key:", process.env.GEMINI_KEY);
+        //console.log("API Key:", process.env.GEMINI_KEY);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" });
 
         // Thử tạo nội dung đơn giản
