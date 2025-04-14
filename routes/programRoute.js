@@ -10,7 +10,9 @@ import {
     deleteProblem,
     compile,
     submissionCode,
-    generateChartCode
+    generateChartCode,
+
+    codeCompletion
 } from "../controllers/programController.js";
 import { protect, authorize } from "../middlewares/auth.js";
 const router = express.Router();
@@ -42,5 +44,8 @@ router.route('/:id/submit/:submissionId')
     .get(protect, getSubmission);
 
 router.route('/generate-chart').post(generateChartCode);
+
+router.route('/code-completion')
+    .post(codeCompletion)
 
 export default router;

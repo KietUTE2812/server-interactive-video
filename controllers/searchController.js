@@ -170,7 +170,7 @@ export const fetchCourses = asyncHandler(async (req, res, next) => {
         const skip = (pageNumber - 1) * limitNumber;
 
         // Log để debug
-        console.log(`Page: ${pageNumber}, Limit: ${limitNumber}, Skip: ${skip}`);
+        //console.log(`Page: ${pageNumber}, Limit: ${limitNumber}, Skip: ${skip}`);
 
         // Assuming you have a Course model
         const courses = await Course.find()
@@ -179,7 +179,7 @@ export const fetchCourses = asyncHandler(async (req, res, next) => {
             .sort({ createdAt: -1 });
 
         // Log để debug số lượng kết quả trả về
-        console.log(`Courses found: ${courses.length}`);
+        //console.log(`Courses found: ${courses.length}`);
 
         // Get total count for pagination info
         const totalCount = await Course.countDocuments();

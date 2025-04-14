@@ -7,6 +7,8 @@ import generate from '../utils/generateByOpenAI.js';
 import Submission from '../models/Submission.js';
 import mongoose from 'mongoose';
 import ModuleProgress from '../models/Progress.js';
+import { GenerateInstructions } from '../utils/promptCodeCompletion_Grok.js';
+import { CompletionCopilot } from 'monacopilot';
 
 // @desc      Compile code
 // @route     POST /api/v1/program/compile
@@ -508,7 +510,7 @@ const checkValidCode = async (code, lang, input, codeExecute) => {
     });
 
     console.log("API Response:", response.data);
-    if(response.data.run.stderr) {
+    if (response.data.run.stderr) {
         return false;
     }
     return true;
@@ -541,10 +543,10 @@ export const generateChartCode = asyncHandler(async (req, res, next) => {
     const response = await generate.generateChartCode(prompt);
     console.log("Promt:", prompt);
     console.log("Response:", response);
-    if (!response || !response.data ) {
+    if (!response || !response.data) {
         return next(new ErrorResponse('Failed to generate chart code', 500));
     }
-    res.status(200).json({ success: true, data: response.data});
+    res.status(200).json({ success: true, data: response.data });
 
 })
 
@@ -566,5 +568,75 @@ function getFileSize(content) {
     return Math.round(blob / Math.pow(1024, i), 2) + ' ' + sizes[i];
 }
 
+const copilot = new CompletionCopilot(process.env.MISTRAL_API_KEY, {
+    provider: 'mistral',
+    model: 'codestral',
+})
+
+export const codeCompletion = asyncHandler(async (req, res, next) => {
+    try {
+        const {
+            language,
+            fullCode,
+            codeBeforeCursor,
+            codeAfterCursor,
+            currentLine,
+            lineContext,
+            cursorPosition
+        } = req.body;
+        if (!language) {
+            return next(new ErrorResponse('Missing code or language', 400));
+        }
+
+        const messages = GenerateInstructions(
+            language,
+            fullCode,
+            codeBeforeCursor,
+            codeAfterCursor,
+            currentLine,
+            lineContext,
+            cursorPosition);
+        console.log('Sending request to Grok AI:', messages);
+
+        const grokResponse = await fetch('https://api.x.ai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${process.env.GROK_API}`
+            },
+            body: JSON.stringify({
+                model: 'grok-3-beta',
+                messages,
+                max_tokens: 50,
+                temperature: 0.3
+            })
+        });
+
+        if (!grokResponse.ok) {
+            const errorData = await grokResponse.json();
+            console.error('Grok API error:', errorData);
+            if (grokResponse.status === 429) {
+                return next(new ErrorResponse('Rate limit exceeded', 429));
+            }
+            return next(new ErrorResponse(`Grok AI API error: ${errorData.message || 'Unknown error'}`, 500));
+        }
+
+        const completionData = await grokResponse.json();
+        console.log('Grok AI response:', completionData);
+
+        const suggestions = completionData.choices.map(choice => ({
+            text: choice.message.content,
+            score: choice.score || 1.0
+        }));
+
+        res.status(200).json({
+            success: true,
+            data: suggestions
+        });
+    } catch (error) {
+        console.error('Code completion error:', error);
+        return next(new ErrorResponse('Failed to generate code completion', 500));
+    }
+});
 
 
