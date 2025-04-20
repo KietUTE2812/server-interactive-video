@@ -5,7 +5,9 @@ import {
     searchWithLevels,
     getTags,
     getLevels,
-    fetchCourses
+    fetchCourses,
+    // createSearchIndex,
+    // advancedSearch
 } from "../controllers/searchController.js";
 import { protect, authorize } from "../middlewares/auth.js";
 
@@ -38,5 +40,13 @@ router.route('/')
 
 router.route('/fetchCourses')
     .get(protect, authorize('student'), fetchCourses);
+
+// // Route cho tạo text index - dành riêng cho admin
+// router.route('/create-index')
+//     .post(protect, authorize('admin'), createSearchIndex);
+
+// // Route cho tìm kiếm nâng cao với nhiều tiêu chí
+// router.route('/advanced')
+//     .post(protect, authorize('student'), advancedSearch);
 
 export default router;
