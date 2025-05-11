@@ -14,6 +14,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
     "@azure/msal-node": "^2.14.0",
+    "@google-cloud/storage": "^7.16.0",
     "@google/generative-ai": "^0.24.0",
     "@gradio/client": "^1.13.0",
     "@huggingface/inference": "^3.4.1",
@@ -47,6 +48,7 @@
     "multer": "^1.4.5-lts.1",
     "multer-gridfs-storage": "5.0.2",
     "multer-storage-cloudinary": "^4.0.0",
+    "natural": "^8.0.1",
     "nodemailer": "^6.9.15",
     "nodemon": "^3.1.7",
     "openai": "^4.72.0",

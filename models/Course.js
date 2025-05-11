@@ -7,7 +7,7 @@ const CourseSchema = new Schema({
         type: String,
         required: true,
         unique: true,
-        maxlenghth: [10, 'Course ID can not be more tham 10 characters']
+        maxlenghth: [10, 'Course ID can not be more than 10 characters']
     },
     title: {
         type: String,
