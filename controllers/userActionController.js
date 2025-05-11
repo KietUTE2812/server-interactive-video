@@ -24,7 +24,9 @@ export const enrollCourse = asyncHandler(async (req, res, next) => {
      // Enroll the user in the course
     user.enrolled_courses.push(course._id);
     await user.save();
-
+    // Add the user to the course's enrolled users
+    course.enrollmentCount += 1;
+    await course.save();
     // Create a progress object for the user
     course.modules.forEach(async (module) => {
         const progress = new Progress({

@@ -2,73 +2,170 @@ import User from '../models/User.js';
 import asyncHandler from 'express-async-handler';
 import token from '../utils/generateToken.js';
 import sendEmail from '../utils/sendEmail.js';
-import bcrypt from "bcryptjs"
+import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from 'uuid';
-import { OAuth2Client } from 'google-auth-library';
 import jwt from 'jsonwebtoken';
-import crypto from 'crypto';
 import ErrorResponse from "../utils/ErrorResponse.js";
 
+/**
+ * Helper function to create a standardized API response
+ * @param {boolean} success Whether the operation was successful
+ * @param {string} message Success or error message
+ * @param {*} data Response data (optional)
+ * @returns {object} Standardized response object
+ */
+const createResponse = (success, message, data = null) => {
+    const response = {
+        status: success ? "success" : "error",
+        message
+    };
+    
+    if (data) {
+        response.data = data;
+    }
+    
+    return response;
+};
 
-// const checkAuthStatus = async (req, res) => {
-//     try {
-//         console.log('Received userId:', req.user);
-//         // The verifyToken middleware should have added the user's ID to the request object
-//         const user = req.user;
+/**
+ * Helper function to safely extract cookie values
+ * @param {string} cookieString The cookie string from headers
+ * @param {string} name Cookie name to extract
+ * @returns {string|null} Cookie value or null if not found
+ */
+function getCookieValue(cookieString, name) {
+    if (!cookieString) return null;
+    
+    // Split cookies into array
+    const cookieArray = cookieString.split('; ');
+    
+    // Find cookie with matching name
+    const cookie = cookieArray.find(cookie => cookie.startsWith(name + '='));
+    
+    // Return value or null
+    return cookie ? cookie.split('=')[1] : null;
+}
 
-//         if (!req.user) {
-//             return res.status(401).json({ message: 'Không tìm thấy thông tin người dùng' });
-//         }
-//         // If we've got this far, the token is valid and we've found the user
-//         res.status(200).json({
-//             status: 'success',
-//             data: {
-//                 user: {
-//                     id: _id,
-//                     email,
-//                     username,
-//                     role,
-//                     // Add any other user fields you want to send to the frontend
-//                 }
-//             }
-//         });
-//     } catch (error) {
-//         console.error('Error in check-auth-status:', error);
-//         res.status(500).json({ message: 'Internal server error' });
-//     }
-// };
+/**
+ * Set secure refresh token cookie
+ * @param {object} res Express response object
+ * @param {string} refreshToken JWT refresh token
+ */
+const setRefreshTokenCookie = (res, refreshToken) => {
+    res.cookie('refreshToken', refreshToken, {
+        httpOnly: true,
+        sameSite: 'None',
+        secure: process.env.NODE_ENV === 'production', // Only HTTPS in production
+        maxAge: 3 * 24 * 60 * 60 * 1000 // 3 days
+    });
+};
 
-// const checkAuth = asyncHandler(async (req, res) => {
-//     const user = await User.findById(req.user._id).select('-username -email -role');
-//     if (user) {
-//         res.json({
-//             status: "success",
-//             message: "Get user profile successfully",
-//             data: user
-//         });
-//     } else {
-//         res.status(404);
-//         throw new Error('User not found');
-//     }
-// })
+/**
+ * Handle social login (Google, Facebook)
+ * @param {object} socialData Social login data
+ * @param {string} socialIdField Name of social ID field
+ * @returns {Promise<object>} User and refresh token
+ */
+const handleSocialLogin = async (socialData, socialIdField) => {
+    const { email, picture, fullname } = socialData;
+    const socialId = socialData[socialIdField];
+    
+    let user = await User.findOne({ email });
+    let refreshToken;
+    
+    if (!user) {
+        // Create new user
+        user = await User.create({
+            [socialIdField]: socialId,
+            userId: uuidv4(),
+            email: email,
+            username: email,
+            profile: { 
+                picture: picture, 
+                fullname: fullname 
+            },
+            role: 'student',
+            status: 'active'
+        });
+        
+        refreshToken = token.generateRefreshToken(user._id);
+        user.refreshToken = refreshToken;
+        await user.save();
+        
+    } else if (user && user[socialIdField] === socialId) {
+        // Existing user with matching socialId
+        refreshToken = token.generateRefreshToken(user._id);
+        await User.findByIdAndUpdate(user._id, { refreshToken }, { new: true });
+        
+    } else if (user && user[socialIdField] !== socialId) {
+        // Existing user without this socialId
+        refreshToken = token.generateRefreshToken(user._id);
+        user[socialIdField] = socialId;
+        
+        // Update profile if provided
+        if (picture) user.profile.picture = picture;
+        if (fullname) user.profile.fullname = fullname;
+        
+        user.refreshToken = refreshToken;
+        await user.save();
+    }
+    
+    return { user, refreshToken };
+};
 
+/**
+ * Validate email format
+ * @param {string} email Email to validate
+ * @returns {boolean} True if valid
+ */
+const isValidEmail = (email) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
 
+/**
+ * Validate password strength
+ * @param {string} password Password to validate
+ * @returns {boolean} True if valid
+ */
+const isValidPassword = (password) => {
+    return password.length >= 8 && 
+           /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[a-zA-Z\d!@#$%^&*(),.?":{}|<>]{8,}$/.test(password);
+};
+
+/**
+ * Generate verification code
+ * @returns {object} Code and expiry
+ */
+const generateVerificationCode = () => {
+    const code = Math.floor(100000 + Math.random() * 900000);
+    const expire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    return { code, expire };
+};
+
+// @desc    Verify user account with code
+// @route   POST /api/v1/users/verify-account
+// @access  Public
 const verifyAccountCtrl = asyncHandler(async (req, res, next) => {
     const { email, code } = req.body;
+    
+    if (!email || !code) {
+        return next(new ErrorResponse('Please provide email and verification code', 400));
+    }
+    
     const user = await User.findOne({ email });
+    
     if (!user) {
         return next(new ErrorResponse(`User not found with email of ${email}`, 404));
     }
+    
     if (user.verifyCode == code) {
         user.status = 'active';
         user.verifyCode = '';
         await user.save();
-        res.json({
-            status: "success",
-            message: "Verify account successfully"
-        });
+        
+        res.status(200).json(createResponse(true, "Verify account successfully"));
     } else {
-        return next(new ErrorResponse(`Invalid code`, 400));
+        return next(new ErrorResponse(`Invalid verification code`, 400));
     }
 });
 
@@ -77,382 +174,304 @@ const verifyAccountCtrl = asyncHandler(async (req, res, next) => {
 // @access  Public
 const registerUserCtrl = asyncHandler(async (req, res, next) => {
     const { username, email, password, fullname } = req.body;
-    const userExists = await User.findOne({ email });
-    //Kiểm tra password
-    if (password.length < 8 || (/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>])[a-zA-Z\d!@#$%^&*(),.?":{}|<>]{8,}$/).test(password) === false) {
+    
+    // Validate input
+    if (!username || !email || !password) {
+        return next(new ErrorResponse('Please provide username, email and password', 400));
+    }
+    
+    if (!isValidEmail(email)) {
+        return next(new ErrorResponse('Please provide a valid email address', 400));
+    }
+    
+    if (!isValidPassword(password)) {
         return next(new ErrorResponse('Password must be at least 8 characters long and contain at least one lowercase letter, one uppercase letter, one number and one special character', 400));
     }
-    //Kiểm tra xem user đã tồn tại chưa
-    if (userExists) {
-        return next(new ErrorResponse('User already exists', 400));
+    
+    // Check if user already exists
+    const emailExists = await User.findOne({ email });
+    if (emailExists) {
+        return next(new ErrorResponse('Email already registered', 400));
     }
-    const userExistsUsername = await User.findOne({ username });
-    //Kiểm tra xem user đã tồn tại chưa
-    if (userExistsUsername) {
-        return next(new ErrorResponse('Username already exists', 400));
+    
+    const usernameExists = await User.findOne({ username });
+    if (usernameExists) {
+        return next(new ErrorResponse('Username already taken', 400));
     }
-
-    // //Băm password
-    // const salt = await bcrypt.genSalt(10)
-    // const hashedPassword = await bcrypt.hash(password, salt)
-    //Tạo user
+    
+    // Create new user
     const userId = uuidv4();
     const user = await User.create({
         userId: userId,
         profile: {
-            fullname: fullname,
+            fullname: fullname || username,
         },
-        username: username,
-        email: email,
-        password: password
+        username,
+        email,
+        password // Password will be hashed in the User model pre-save hook
     });
-    //Tạo verify code
-    const code = Math.floor(100000 + Math.random() * 900000);
-    const expire = Date.now() + 10 * 60 * 1000;
+    
+    // Generate verification code
+    const { code, expire } = generateVerificationCode();
     user.verifyCode = code;
     user.verifyCodeExpired = expire;
     await user.save();
-    //Tạo message
+    
+    // Send verification email
     const message = `Please enter the following code to verify your account: ${code}`;
-    //Kiểm tra user đã tạo chưa
-    if (user) {
-        try {
-            await sendEmail({
-                title: 'Verify account',
-                email: user.email,
-                subject: '[Code Chef] Verify your account. Valid for 10 minutes',
-                message
-            });
-        } catch (error) {
-            user.verifyCode = '';
-            await user.save();
-            return next(new ErrorResponse('Email could not be sent', 500));
-        }
-        res.status(201).json({
-            status: "success",
-            message: "User created successfully",
-            data: user
+    
+    try {
+        await sendEmail({
+            title: 'Verify account',
+            email: user.email,
+            subject: '[Code Chef] Verify your account. Valid for 10 minutes',
+            message
         });
-    } else {
-        return next(new ErrorResponse('Invalid user data', 400));
+        
+        res.status(201).json(createResponse(
+            true, 
+            "User created successfully. Please check your email for verification code.",
+            user
+        ));
+    } catch (error) {
+        // Clear verification code if email fails
+        user.verifyCode = '';
+        await user.save();
+        console.error('Error sending email:', error);
+        return next(new ErrorResponse('Account created but verification email could not be sent. Please contact support.', 500));
     }
-
-}
-);
+});
 
 // @desc    Login user
 // @route   POST /api/v1/users/login
 // @access  Public
 const loginUserCtrl = asyncHandler(async (req, res, next) => {
     const { isGoogle, isFacebook, isGitHub } = req.body;
-
+    
     try {
+        // Handle Google login
         if (isGoogle) {
-            const { email, googleId, picture, fullname } = req.body;
-            var user = await User.findOne({ email });
-            if (!user) {
-                //Lưu refreshtoken vào db
-                const userAdd = await User.create({
-                    googleId: googleId,
-                    userId: uuidv4(),
-                    email: email,
-                    username: email,
-                    profile: { picture: picture, fullname: fullname },
-                    role: 'student'
-                });
-                //Tạo Refreshtoken
-                const refreshToken = token.generateRefreshToken(userAdd._id);
-                //Lưu refreshtoken vào db
-                userAdd.refreshToken = refreshToken;
-                await userAdd.save();
-                // Trả về token ở response và refreshtoken ở cookie
-                res.cookie('refreshToken', refreshToken, {
-                    httpOnly: true,
-                    sameSite: 'None',
-                    maxAge: 3 * 24 * 60 * 60 * 1000
-                });
-                res.json({
-                    status: "success",
-                    message: "Signup successfully",
-                    data: {
-                        user: userAdd,
-                        token: token.generateToken(userAdd._id)
-                    }
-                });
-                //Kiểm tra xem user đã tồn tại chưa
-            } else if (user && user.googleId === googleId) {
-                //Tạo Refreshtoken
-                const refreshToken = token.generateRefreshToken(user._id);
-                //Lưu refreshtoken vào db
-                await User.findByIdAndUpdate(user._id, { refreshToken }, { new: true });
-                //Trả về token ở response và refreshtoken ở cookie
-                res.cookie('refreshToken', refreshToken, {
-                    httpOnly: true,
-                    sameSite: 'None',
-                    maxAge: 3 * 24 * 60 * 60 * 1000
-                });
-                res.json({
-                    status: "success",
-                    message: "Login successfully",
-                    data: {
-                        user: user,
-                        token: token.generateToken(user)
-                    }
-                });
-            }
-            //Kiểm tra xem user đã tồn tại nhưng chưa có googleId
-            else if (user && user.googleId !== googleId) {
-                //Tạo Refreshtoken
-                const refreshToken = token.generateRefreshToken(user._id);
-                //Lưu refreshtoken vào db
-                user.refreshToken = refreshToken;
-                user.googleId = googleId;
-                user.profile.picture = picture;
-                user.profile.fullname = fullname;
-                await user.save();
-
-                //Trả về token ở response và refreshtoken ở cookie
-                res.cookie('refreshToken', refreshToken, {
-                    httpOnly: true,
-                    sameSite: 'None',
-                    maxAge: 3 * 24 * 60 * 60 * 1000
-                });
-
-                res.json({
-                    status: "success",
-                    message: "Login successfully",
-                    data: {
-                        user: user,
-                        token: token.generateToken(user)
-                    }
-                });
-            }
-
+            const socialData = {
+                email: req.body.email,
+                googleId: req.body.googleId,
+                picture: req.body.picture,
+                fullname: req.body.fullname
+            };
+            
+            const { user, refreshToken } = await handleSocialLogin(socialData, 'googleId');
+            
+            // Set refresh token cookie
+            setRefreshTokenCookie(res, refreshToken);
+            
+            // Send response
+            res.status(200).json(createResponse(
+                true,
+                "Login successfully",
+                {
+                    user,
+                    token: token.generateToken(user._id)
+                }
+            ));
         }
+        // Handle Facebook login
         else if (isFacebook) {
-            const { email, facebookId, picture, fullname } = req.body;
-            var user = await User.findOne({ email });
-            if (!user) {
-                //Lưu refreshtoken vào db
-                const userAdd = await User.create({
-                    facebookId: facebookId,
-                    userId: uuidv4(),
-                    email: email,
-                    username: email,
-                    profile: { picture: picture, fullname: fullname },
-                    role: 'student'
-                });
-                //Tạo Refreshtoken
-                const refreshToken = token.generateRefreshToken(userAdd._id);
-                //Lưu refreshtoken vào db
-                userAdd.refreshToken = refreshToken;
-                await userAdd.save();
-
-                // Trả về token ở response và refreshtoken ở cookie
-                res.cookie('refreshToken', refreshToken, {
-                    httpOnly: true,
-                    sameSite: 'None',
-                    maxAge: 3 * 24 * 60 * 60 * 1000
-                });
-                res.json({
-                    status: "success",
-                    message: "Signup successfully",
-                    data: {
-                        user: userAdd,
-                        token: token.generateToken(userAdd._id)
-                    }
-                });
-                //Kiểm tra xem user đã tồn tại chưa
-            } else if (user && user.facebookId === facebookId) {
-                //Tạo Refreshtoken
-                const refreshToken = token.generateRefreshToken(user._id);
-                //Lưu refreshtoken vào db
-                await User.findByIdAndUpdate(user._id, { refreshToken }, { new: true });
-                //Trả về token ở response và refreshtoken ở cookie
-                res.cookie('refreshToken', refreshToken, {
-                    httpOnly: true,
-                    sameSite: 'None',
-                    maxAge: 3 * 24 * 60 * 60 * 1000
-                });
-                res.json({
-                    status: "success",
-                    message: "Login successfully",
-                    data: {
-                        user: user,
-                        token: token.generateToken(user)
-                    }
-                });
-            }
-            //Kiểm tra xem user đã tồn tại nhưng chưa có facebookId
-            else if (user && user.facebookId !== facebookId) {
-                //Tạo Refreshtoken
-                const refreshToken = token.generateRefreshToken(user._id);
-                //Lưu refreshtoken vào db
-                user.refreshToken = refreshToken;
-                user.facebookId = facebookId;
-                user.profile.picture = picture;
-                user.profile.fullname = fullname;
-                await user.save();
-
-                //Trả về token ở response và refreshtoken ở cookie
-                res.cookie('refreshToken', refreshToken, {
-                    httpOnly: true,
-                    sameSite: 'None',
-                    maxAge: 3 * 24 * 60 * 60 * 1000
-                });
-
-                res.json({
-                    status: "success",
-                    message: "Login successfully",
-                    data: {
-                        user: user,
-                        token: token.generateToken(user)
-                    }
-                });
-            }
-
+            const socialData = {
+                email: req.body.email,
+                facebookId: req.body.facebookId,
+                picture: req.body.picture,
+                fullname: req.body.fullname
+            };
+            
+            const { user, refreshToken } = await handleSocialLogin(socialData, 'facebookId');
+            
+            // Set refresh token cookie
+            setRefreshTokenCookie(res, refreshToken);
+            
+            // Send response
+            res.status(200).json(createResponse(
+                true,
+                "Login successfully",
+                {
+                    user,
+                    token: token.generateToken(user._id)
+                }
+            ));
         }
+        // Handle regular login
         else {
             const { email, password } = req.body;
+            
+            // Validate input
+            if (!email || !password) {
+                return next(new ErrorResponse('Please provide email and password', 400));
+            }
+            
+            // Find active user
             const user = await User.findOne({ email, status: 'active' });
-            //Kiểm tra xem user đã tồn tại chưa
-            if (user && (await bcrypt.compare(password, user?.password))) {
-                //Tạo Refreshtoken
+            
+            // Verify password
+            if (user && (await bcrypt.compare(password, user.password))) {
+                // Generate refresh token
                 const refreshToken = token.generateRefreshToken(user._id);
-                //Lưu refreshtoken vào db
-                await User.findByIdAndUpdate(user._id, { refreshToken }, { new: true });
-                //Trả về token ở response và refreshtoken ở cookie
-                res.cookie('refreshToken', refreshToken, {
-                    httpOnly: true,
-                    maxAge: 3 * 24 * 60 * 60 * 1000
-                });
                 
-                res.json({
-                    status: "success",
-                    message: "Login successfully",
-                    data: {
+                // Save refresh token
+                await User.findByIdAndUpdate(user._id, { refreshToken }, { new: true });
+                
+                // Set refresh token cookie
+                setRefreshTokenCookie(res, refreshToken);
+                
+                // Send response with access token
+                res.status(200).json(createResponse(
+                    true,
+                    "Login successfully",
+                    {
                         user,
-                        token: token.generateToken(user)
+                        token: token.generateToken(user._id)
                     }
-                });
+                ));
             } else {
                 return next(new ErrorResponse('Invalid credentials', 401));
             }
         }
-
-    }
-    catch (error) {
+    } catch (error) {
         return next(new ErrorResponse(error.message, 500));
     }
-
 });
 
 // @desc    Get user profile
 // @route   GET /api/v1/users/:id
 // @access  Private
-const getUserProfileCtrl = asyncHandler(async (req, res) => {
+const getUserProfileCtrl = asyncHandler(async (req, res, next) => {
     const _id = req.params.userid;
-
-    const user = await User.findById(_id).select('-password -refreshToken').populate('enrolled_courses');
-    if (user) {
-        res.json({
-            status: "success",
-            message: "Get user profile successfully",
-            data: user
-        });
-    } else {
+    let user;
+    try {
+        user = await User.findById(_id)
+        .select('-password -refreshToken')
+        .populate('enrolled_courses');
+    }   
+    catch (error) {
         return next(new ErrorResponse('User not found', 404));
     }
-    console.log("get profile user");
-
+    if (!user) {
+        return next(new ErrorResponse('User not found', 404));
+    }
+    
+    res.status(200).json(createResponse(
+        true,
+        "Get user profile successfully",
+        user
+    ));
 });
 
 // @desc    Update user profile
-// @route   PUT /api/v1/users/update-profile
+// @route   PUT /api/v1/users/:userid
 // @access  Private
 const updateUserCtrl = asyncHandler(async (req, res, next) => {
     const userId = req.params.userid;
     const filePath = req.file?.path;
     const { fullname, bio, phone } = req.body;
-    // Kiểm tra xem user đã tồn tại chưa
+    
+    // Find user
     const user = await User.findById(userId);
+    
     if (!user) {
         return next(new ErrorResponse('User not found', 404));
     }
-    // Cập nhật thông tin user
-    user.profile.fullname = fullname || user.profile.fullname;
-    user.profile.bio = bio || user.profile.bio;
-    user.profile.phone = phone || user.profile.phone;
-    if (filePath) {
-        user.profile.picture = filePath;
+    
+    // Check if the authenticated user is updating their own profile
+    if (req.user._id.toString() !== userId) {
+        return next(new ErrorResponse('Not authorized to update this profile', 403));
     }
+    
+    // Update user profile fields
+    if (fullname) user.profile.fullname = fullname;
+    if (bio) user.profile.bio = bio;
+    if (phone) user.profile.phone = phone;
+    if (filePath) user.profile.picture = filePath;
+    
     await user.save();
-    res.json({
-        status: "success",
-        message: "Update user profile successfully",
-        data: user
-    });
+    
+    res.status(200).json(createResponse(
+        true,
+        "Profile updated successfully",
+        user
+    ));
+});
 
-}
-);
-
-// @desc    Update user profile
-// @route   PUT /api/v1/users/update-profile
-// @access  Private
+// @desc    Admin updates user profile
+// @route   PUT /api/v1/users/update-by-admin/:userid
+// @access  Private/Admin
 const updateUserByAdminCtrl = asyncHandler(async (req, res, next) => {
     const adminId = req.params.userid;
     const filePath = req.file?.path;
     const { fullname, bio, phone, userId, status, role } = req.body;
-    // Kiểm tra xem user đã tồn tại chưa
+    
+    // Validate input
+    if (!userId) {
+        return next(new ErrorResponse('User ID to update is required', 400));
+    }
+    
+    // Check admin exists
     const admin = await User.findById(adminId);
     if (!admin) {
-        return next(new ErrorResponse('User not found', 404));
+        return next(new ErrorResponse('Admin user not found', 404));
     }
-
-    const user = await User.findById(userId).select('profile userId status role fullname bio phone');
-    // Cập nhật thông tin user
-    user.profile.fullname = fullname || user.profile.fullname;
-    user.profile.bio = bio || user.profile.bio;
-    user.profile.phone = phone || user.profile.phone;
-    user.status = status || user.status
-    user.role = role || user.role
-    if (filePath) {
-        user.profile.picture = filePath;
+    
+    // Check user to update exists
+    const user = await User.findById(userId);
+    if (!user) {
+        return next(new ErrorResponse('User to update not found', 404));
     }
-    console.log(user);
+    
+    // Update user fields
+    if (fullname) user.profile.fullname = fullname;
+    if (bio) user.profile.bio = bio;
+    if (phone) user.profile.phone = phone;
+    if (status) user.status = status;
+    if (role) user.role = role;
+    if (filePath) user.profile.picture = filePath;
+    
     await user.save();
-    res.json({
-        status: "success",
-        message: "Update user profile successfully",
-        data: user
-    });
+    
+    res.status(200).json(createResponse(
+        true,
+        "User updated successfully by admin",
+        user
+    ));
+});
 
-}
-);
-
-
-
-// @desc    Forgot password (email)
+// @desc    Forgot password
 // @route   POST /api/v1/users/forgot-password
 // @access  Public
-export const forgotPasswordCtrl = asyncHandler(async (req, res, next) => {
+const forgotPasswordCtrl = asyncHandler(async (req, res, next) => {
     const { email } = req.body;
-
+    
+    if (!email) {
+        return next(new ErrorResponse('Please provide an email address', 400));
+    }
+    
+    if (!isValidEmail(email)) {
+        return next(new ErrorResponse('Please provide a valid email address', 400));
+    }
+    
     // Check if the user exists
     const user = await User.findOne({ email });
     if (!user) {
         return next(new ErrorResponse('There is no user with that email', 404));
     }
-    // Tạo token chứa 10 ký tự ngẫu nhiên
+    
+    // Generate reset token
     const resetToken = Math.floor(100000 + Math.random() * 900000);
-    const resetExpire = Date.now() + 10 * 60 * 1000;
+    const resetExpire = Date.now() + 10 * 60 * 1000; // 10 minutes
+    
+    // Save to user
     user.verifyForgotPassword = resetToken;
     user.verifyForgotPasswordExpired = resetExpire;
-    await user.save(); // Lưu token và thời gian hết hạn vào db
-
-    // Tạo nội dung email
+    await user.save();
+    
+    // Prepare email
     const message = `Please enter the following code to reset your password: ${resetToken}`;
-
+    
     try {
         // Send the email
         await sendEmail({
@@ -460,183 +479,222 @@ export const forgotPasswordCtrl = asyncHandler(async (req, res, next) => {
             subject: 'Your Password Reset Token (valid for 10 minutes)',
             message
         });
-
-        res.status(200).json({
-            status: 'success',
-            message: 'Token sent to email!'
-        });
+        
+        res.status(200).json(createResponse(
+            true,
+            'Password reset code sent to email!'
+        ));
     } catch (err) {
+        // Clear reset data on email failure
+        user.verifyForgotPassword = '';
+        user.verifyForgotPasswordExpired = '';
+        await user.save();
+        
         return next(new ErrorResponse('Email could not be sent', 500));
     }
 });
 
-// @desc    Reset password (token, new password)
-// @route   GET /api/v1/users/reset-password/:token
+// @desc    Reset password
+// @route   POST /api/v1/users/reset-password
 // @access  Public
-export const resetPasswordCtrl = asyncHandler(async (req, res, next) => {
+const resetPasswordCtrl = asyncHandler(async (req, res, next) => {
     const { code, password } = req.body;
-
+    
+    if (!code || !password) {
+        return next(new ErrorResponse('Please provide reset code and new password', 400));
+    }
+    
+    if (!isValidPassword(password)) {
+        return next(new ErrorResponse('Password must be at least 8 characters long and contain at least one lowercase letter, one uppercase letter, one number and one special character', 400));
+    }
+    
     try {
-        // Xác thực token
-        const user = await User.findOne({ verifyForgotPassword: code, verifyForgotPasswordExpired: { $gt: Date.now() } });
-
-        // Kiểm tra user
+        // Find user with valid code
+        const user = await User.findOne({ 
+            verifyForgotPassword: code, 
+            verifyForgotPasswordExpired: { $gt: Date.now() } 
+        });
+        
+        // Check user
         if (!user) {
-            return next(new ErrorResponse('Token is invalid or has expired', 400));
+            return next(new ErrorResponse('Reset code is invalid or has expired', 400));
         }
-
-        // Set new password
-        user.password = password
+        
+        // Update password
+        user.password = password;
         user.verifyForgotPassword = '';
         user.verifyForgotPasswordExpired = '';
         await user.save();
-
+        
         // Send response
-        res.status(200).json({
-            status: 'success',
-            message: 'Password reset successful!',
-            token: token.generateToken(user),
-        });
+        res.status(200).json(createResponse(
+            true,
+            'Password reset successful!',
+            { token: token.generateToken(user._id) }
+        ));
     } catch (err) {
-        // Handle invalid or expired token
-        return next(new ErrorResponse('Invalid token or token was expired', 400));
+        return next(new ErrorResponse('Failed to reset password', 500));
     }
 });
 
-// @desc Delete user
-// @route DELETE /api/v1/users/:userid
-// @access Private/Admin
+// @desc    Delete user (soft delete)
+// @route   DELETE /api/v1/users/:userid
+// @access  Private/Admin
 const deleteUserCtrl = asyncHandler(async (req, res, next) => {
-    const user = await User.findById(req.params.userid);
-    if (user) {
-        await User.updateOne({ _id: req.params.userid }, { status: 'removed' });
-        res.json({
-            status: "success",
-            message: "User removed successfully"
-        });
-    }
-    else {
+    const userId = req.params.userid;
+    
+    const user = await User.findById(userId);
+    
+    if (!user) {
         return next(new ErrorResponse('User not found', 404));
     }
+    
+    // Soft delete - update status to 'removed'
+    await User.updateOne({ _id: userId }, { status: 'removed' });
+    
+    res.status(200).json(createResponse(
+        true,
+        "User removed successfully"
+    ));
 });
 
-function getCookieValue(cookieString, name) {
-    // Tách các cookie thành mảng
-    const cookieArray = cookieString.split('; ');
-
-    // Tìm cookie có key là 'name'
-    const cookie = cookieArray.find(cookie => cookie.startsWith(name + '='));
-
-    // Trả về giá trị của cookie nếu tìm thấy, ngược lại trả về null
-    return cookie ? cookie.split('=')[1] : null;
-}
-
-// @desc    Refresh token
+// @desc    Refresh access token
 // @route   POST /api/v1/users/refresh-token
 // @access  Public
 const refreshAccessTokenCtrl = asyncHandler(async (req, res, next) => {
     const cookie = req.headers.cookie;
     const refreshToken = getCookieValue(cookie, 'refreshToken');
-    if (!cookie && !refreshToken) {
-        return next(new ErrorResponse('No cookie, no refresh, must login', 401));
+    
+    if (!refreshToken) {
+        return next(new ErrorResponse('Authentication required. Please login.', 401));
     }
-    await jwt.verify(refreshToken, process.env.JWT_SECRET, async (error, decoded) => {
-        if (error) {
-            return next(new ErrorResponse('Invalid refresh token', 403));
-        }
+    
+    try {
+        // Verify token
+        const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+        
+        // Find user with matching refresh token
         const user = await User.findById(decoded._id);
+        
         if (!user || user.refreshToken !== refreshToken) {
             return next(new ErrorResponse('Invalid refresh token', 403));
         }
-        res.cookie('refreshToken', refreshToken, {
-            httpOnly: true,
-            sameSite: 'None',
-            maxAge: 3 * 24 * 60 * 60 * 1000
-        });
-        res.json({
-            status: "success",
-            message: "Refresh access token successfully",
-            data: {
-                success: true,
-                newToken: token.generateToken(user)
+        
+        // Set refresh token cookie again
+        setRefreshTokenCookie(res, refreshToken);
+        
+        // Generate new access token
+        const newAccessToken = token.generateToken(user._id);
+        
+        res.status(200).json(createResponse(
+            true,
+            "Access token refreshed successfully",
+            {
+                newToken: newAccessToken
             }
-        });
+        ));
+    } catch (error) {
+        return next(new ErrorResponse('Invalid refresh token', 403));
     }
-    );
 });
 
 // @desc    Logout
 // @route   POST /api/v1/users/logout
 // @access  Private
-
-const logoutCtrl = asyncHandler(async (req, res) => {
+const logoutCtrl = asyncHandler(async (req, res, next) => {
     const cookie = req.headers.cookie;
-    if (!cookie) {
-        return next(new ErrorResponse('No cookie, no refresh, must login', 401));
-    }
-    const refreshToken = cookie.split('=')[1];
-    //Kiểm tra xem có cookie và refreshToken không
+    const refreshToken = getCookieValue(cookie, 'refreshToken');
+    
     if (!refreshToken) {
-        return next(new ErrorResponse('No cookie, no refresh, must login', 401));
+        return next(new ErrorResponse('No active session found', 400));
     }
-    //Xóa refreshToken trong db
-    await User.findOneAndUpdate({ refreshToken }, { refreshToken: '' }, { new: true });
-    //Xóa refreshToken trong cookie
-    res.clearCookie('refreshToken');
-    res.json({
-        status: "success",
-        message: "Logout successfully"
-    });
+    
+    try {
+        // Clear refresh token in DB
+        await User.findOneAndUpdate(
+            { refreshToken }, 
+            { refreshToken: '' }
+        );
+        
+        // Clear cookie
+        res.clearCookie('refreshToken', {
+            httpOnly: true,
+            sameSite: 'None',
+            secure: process.env.NODE_ENV === 'production'
+        });
+        
+        res.status(200).json(createResponse(
+            true,
+            "Logged out successfully"
+        ));
+    } catch (error) {
+        return next(new ErrorResponse('Logout failed', 500));
+    }
 });
 
-// @desc Get users by Filter and Pagination
-// @route GET api/v1/users?limit=1&page=1&filter={}
-// @access Private Admin, Private Intructors
-const getAllUserCtrl = asyncHandler(async (req, res) => {
-    const { limit, page, ...filters } = req.query;
-    const query = filters;
-    if(req.user.role !== 'admin' && limit >= 10 && page >=1) {
-        return next(new ErrorResponse('Not authorized to access this route', 401));
+// @desc    Get all users (with filtering and pagination)
+// @route   GET api/v1/users?limit=10&page=1&...filters
+// @access  Private/Admin/Instructor
+const getAllUserCtrl = asyncHandler(async (req, res, next) => {
+    const { limit = 10, page = 1, ...filters } = req.query;
+    const query = {};
+    
+    // Check permissions for non-admin users
+    if (req.user.role !== 'admin') {
+        // Limit access for non-admin users
+        const requestedLimit = parseInt(limit);
+        const requestedPage = parseInt(page);
+        
+        if (requestedLimit > 10 || requestedPage > 10) {
+            return next(new ErrorResponse('Access limited for non-admin users', 403));
+        }
     }
-    // Filter by email
+    
+    // Apply filters
     if (filters.email) {
         query.email = { $regex: filters.email, $options: 'i' };
     }
-
-    // Filter by fullname
+    
     if (filters.fullname) {
         query['profile.fullname'] = { $regex: filters.fullname, $options: 'i' };
-        delete query.fullname;
     }
-
-    // Filter by username
+    
     if (filters.username) {
         query.username = { $regex: filters.username, $options: 'i' };
     }
-
-    // Filter by role
+    
     if (filters.role) {
         query.role = filters.role;
     }
+    
     if (filters.courseId) {
         query.enrolled_courses = { $in: [filters.courseId] };
     }
-
-    // Filter by status
+    
     if (filters.status) {
         query.status = filters.status;
     }
-    console.log(query);
+    
+    // Handle pagination
+    const parsedLimit = parseInt(limit);
+    const parsedPage = parseInt(page);
+    
+    // Fetch users
     const users = await User.find(query)
-        .limit(limit)
-        .skip(limit * (page - 1)).select('profile email username role status');
+        .select('profile email username role status')
+        .limit(parsedLimit)
+        .skip(parsedLimit * (parsedPage - 1))
+        .sort({ createdAt: -1 });
+        
+    // Get total count for pagination
     const total = await User.countDocuments(query);
-
+    
     res.status(200).json({
         status: "success",
         total,
-        limit,
-        page,
+        page: parsedPage,
+        limit: parsedLimit,
+        totalPages: Math.ceil(total / parsedLimit),
         data: {
             users
         }
@@ -644,7 +702,16 @@ const getAllUserCtrl = asyncHandler(async (req, res) => {
 });
 
 export default {
-    registerUserCtrl, loginUserCtrl, getUserProfileCtrl, updateUserCtrl,
-    forgotPasswordCtrl, resetPasswordCtrl, deleteUserCtrl,
-    refreshAccessTokenCtrl, logoutCtrl, verifyAccountCtrl, getAllUserCtrl, updateUserByAdminCtrl
+    registerUserCtrl,
+    loginUserCtrl,
+    getUserProfileCtrl,
+    updateUserCtrl,
+    forgotPasswordCtrl,
+    resetPasswordCtrl,
+    deleteUserCtrl,
+    refreshAccessTokenCtrl,
+    logoutCtrl,
+    verifyAccountCtrl,
+    getAllUserCtrl,
+    updateUserByAdminCtrl
 };

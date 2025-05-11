@@ -107,7 +107,7 @@ const UserSchema = new Schema({
     }],
     status: {
         type: String,
-        enum: ['active', 'blocked', 'pending'],
+        enum: ['active', 'removed', 'pending'],
         default: 'pending'
     },
     createAt: {

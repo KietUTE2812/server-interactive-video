@@ -30,6 +30,7 @@ import moduleItemRoute from "../routes/moduleItemRoute.js";
 
 import searchRoute from "../routes/searchRoute.js";
 import messageRoute from "../routes/messageRoute.js";
+import chatbotRoute from '../routes/chatbotRoute.js';
 
 
 // // Use environment variables for Redis connection
@@ -97,7 +98,6 @@ app.use('/api/v1/coursegrades', courseGradeRoute);
 app.use('/api/v1/learns', courseRoute);
 app.use('/api/v1/problem', programRoute);
 app.use('/api/v1/payments', paymentsRoute);
-app.use('/api/v1/livestreams', streamRoute);
 app.use('/api/v1/conversations', conversationRoute);
 app.use('/api/v1/messages', messageRoute);
 app.use('/api/v1/reviews', reviewRoute)
@@ -112,6 +112,7 @@ app.use('/api/v1/student', studentRoute)
 
 app.use('/api/v1/moduleitem', moduleItemRoute)
 app.use('/api/v1/search', searchRoute)
+app.use('/api/v1/chatbot', chatbotRoute);
 
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {
