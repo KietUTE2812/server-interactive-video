@@ -1,0 +1,13 @@
+{
+    "servers": {
+        "filesystem": {
+            "command": "npx",
+            "args": [
+                "-y",
+                "@modelcontextprotocol/server-filesystem",
+                "D:/UTE/HK1_24_25/CodeChef/client-interactive-video"
+            ],
+            "env": {}
+        }
+    }
+}

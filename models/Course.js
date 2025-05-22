@@ -14,7 +14,7 @@ const CourseSchema = new Schema({
         required: true,
         unique: true,
         trim: true,
-        maxlength: [50, 'Title can not be more than 50 characters']
+        maxlength: [500, 'Title can not be more than 50 characters']
     },
     description: {
         type: String,

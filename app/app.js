@@ -114,6 +114,9 @@ app.use('/api/v1/moduleitem', moduleItemRoute)
 app.use('/api/v1/search', searchRoute)
 
 // Middleware xử lý lỗi
+app.use((req, res, next) => {
+  next(new ErrorResponse(`Not found - ${req.originalUrl}`, 404));
+});
 app.use((err, req, res, next) => {
   console.error(err.stack);
 
@@ -128,7 +131,7 @@ app.use((err, req, res, next) => {
   // Nếu là lỗi khác
   res.status(500).json({
     success: false,
-    error: 'Lỗi máy chủ'
+    error: 'Server error'
   });
 });
 

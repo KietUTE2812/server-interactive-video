@@ -197,6 +197,7 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
 
             // Process questions
             let questionData = req.body.questions;
+            console.log("questionData", questionData);
             try {
                 if (typeof questionData === 'string') {
                     questionData = JSON.parse(questionData);
