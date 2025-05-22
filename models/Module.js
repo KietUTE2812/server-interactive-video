@@ -70,8 +70,8 @@ const VideoSchema = new Schema({
             },
             questionType: {
                 type: String,
-                enum: ['multipleChoice', 'trueFalse', 'onlyChoice'],
-                default: 'onlyChoice'
+                enum: ['multiple-choice', 'true-false', 'single-choice'],
+                default: 'single-choice'
             },
             question: {
                 type: String
