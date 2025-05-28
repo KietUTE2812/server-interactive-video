@@ -477,6 +477,7 @@ export const fetchCourses = asyncHandler(async (req, res, next) => {
             return next(new ErrorResponse("Invalid page or limit parameter", 400));
         }        // Build query filter
         const filter = {};
+        filter.isApproved = true;
 
         // Category and tags filter
         if (category) {

@@ -1,0 +1,50 @@
+version: '3'
+name: kafka-node
+
+services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    container_name: zookeeper
+    ports:
+      - "2181:2181"
+    networks:
+      - kafka-net
+    environment:
+      - ALLOW_ANONYMOUS_LOGIN=yes
+
+  kafka-node:
+    image: wurstmeister/kafka
+    container_name: kafka-node
+    ports:
+      - "9092:9092"
+    networks:
+      - kafka-net
+    environment:
+      KAFKA_ADVERTISED_HOST_NAME: localhost
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_CREATE_TOPICS: "notifications:1:1,user-notifications:1:1,group-notifications:1:1"
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - zookeeper
+
+  # Optional Kafka manager UI
+  kafka-ui:
+    image: provectuslabs/kafka-ui
+    container_name: kafka-ui
+    ports:
+      - "8080:8080"
+    networks:
+      - kafka-net
+    environment:
+      - KAFKA_CLUSTERS_0_NAME=local
+      - KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS=kafka:9092
+      - KAFKA_CLUSTERS_0_ZOOKEEPER=zookeeper:2181
+    depends_on:
+      - kafka-node
+      - zookeeper
+
+networks:
+  kafka-net:
+    driver: bridge 

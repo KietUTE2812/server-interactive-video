@@ -5,8 +5,11 @@ import ErrorResponse from "../utils/ErrorResponse.js";
 import User from '../models/User.js';
 import mongoose from "mongoose";
 import ModuleProgress from "../models/Progress.js";
-import GCS  from "../utils/ggCloudUpload.js";
-const { uploadToGCS, updateFileOnGCS } = GCS;
+import minio from "../utils/uploadToMiniO.js";
+import dotenv from "dotenv";
+dotenv.config();
+
+import { getNotificationService } from "../services/notificationService.js";
 
 /**
  * Các utilities hỗ trợ cho CourseController
@@ -23,7 +26,6 @@ const buildCourseFilter = async (queryParams, user) => {
   
   // Áp dụng bộ lọc cơ bản
   let filter = { status: 'published', ...otherFilters };
-  
   // Áp dụng bộ lọc theo vai trò người dùng
   if (user?.role === 'instructor') {
     filter.instructor = user._id;
@@ -31,6 +33,10 @@ const buildCourseFilter = async (queryParams, user) => {
   
   if (user?.role === 'student') {
     filter.isApproved = true;
+  }
+
+  if (user?.role === 'admin') {
+    delete filter.status;
   }
   
   // Xử lý tags
@@ -65,7 +71,6 @@ const buildCourseFilter = async (queryParams, user) => {
       filter.$or.push({ instructor: { $in: instructors.map(i => i._id) } });
     }
   }
-  
   return filter;
 };
 
@@ -118,9 +123,10 @@ const validateCourseOwnership = async (courseId, userId, userRole) => {
  * @access    Private
  */
 export const getCourses = asyncHandler(async (req, res, next) => {
-  const { page = 1, limit = 10, orderBy = 'newest', ...query } = req.query;
+  const role = req.user?.role;
+  let { page = 1, limit = 10, orderBy = 'newest', ...query } = req.query;
   const user = req.user;
-  
+
   // Xây dựng bộ lọc từ query parameters
   const filter = await buildCourseFilter(req.query, user);
   
@@ -129,12 +135,12 @@ export const getCourses = asyncHandler(async (req, res, next) => {
   
   // Xác định trường sắp xếp
   const sortField = orderBy === 'newest' 
-    ? { created_at: -1 } 
+    ? { createdAt: -1 } 
     : { averageRating: -1 };
   
   // Thực hiện truy vấn chính với populate tối thiểu
   const courses = await Course.find(filter)
-    .select('title description level price tags averageRating instructor approvedBy reviewCount photo courseId')
+    .select('title description level price tags averageRating instructor status approvedBy isApproved reviewCount photo courseId')
     .populate('instructor', 'email profile')
     .populate('approvedBy', 'email profile.fullName')
     .populate('reviewCount')
@@ -142,6 +148,10 @@ export const getCourses = asyncHandler(async (req, res, next) => {
     .limit(parseInt(limit))
     .skip((parseInt(page) - 1) * parseInt(limit));
 
+  if (role === 'user') {
+    courses = courses.filter(course => course.isApproved);
+  }
+  
   // Trả về kết quả
   res.status(200).json(createPaginatedResponse(courses, page, limit, total));
 });
@@ -277,6 +287,7 @@ export const getCourseByInstructor = asyncHandler(async (req, res, next) => {
 export const createCourse = asyncHandler(async (req, res, next) => {
   // Validate đầu vào
     const { title, description } = req.body;
+    const notificationService = getNotificationService();
   
   if (!title || title.trim() === '') {
     return next(new ErrorResponse('Title is required', 400));
@@ -292,32 +303,50 @@ export const createCourse = asyncHandler(async (req, res, next) => {
     ...req.body,
     instructor: instructorId
   };
-  
   // Upload video nếu có
   if (req.files) {
-      if (req.files.sumaryVideo[0] && req.files.photo[0]) {
+      if (req.files.sumaryVideo[0]) {
         const videoFile = req.files.sumaryVideo[0];
-        const photoFile = req.files.photo[0];
-        console.log('Video file:', videoFile);
         try {
-          const videoUrl = await uploadToGCS(videoFile, courseData.courseId);
-          const photoUrl = await uploadToGCS(photoFile, courseData.courseId);
-          courseData.photo = photoUrl;
-          courseData.sumaryVideo = videoUrl;
+          const videoName = Date.now() + '_' + videoFile.originalname;
+          const videoUrl = await minio.uploadStream(videoName, videoFile.buffer, videoFile.size);
+          courseData.sumaryVideo = `${process.env.MINIO_URL}/${videoUrl.objectName}`;
         } catch (error) {
           return next(new ErrorResponse(`File upload failed: ${error.message}`, 500));
         }
     }
+    
     else {
       return res.status(400).json({
         success: false,
-        message: 'No files uploaded'
+        message: 'No files sumaryVideo uploaded'
       });
+    }
+    if (req.files?.photo && req.files?.photo[0]) {
+      const photoFile = req.files.photo[0];
+      try {
+        const photoName = Date.now() + '_' + photoFile.originalname;
+        const photoUrl = await minio.uploadStream(photoName, photoFile.buffer, photoFile.size);
+        courseData.photo = `${process.env.MINIO_URL}/${photoUrl.objectName}`;
+      } catch (error) {
+        return next(new ErrorResponse(`File upload failed: ${error.message}`, 500));
+      }
     }
   }
   
   // Tạo khóa học mới
   const course = await Course.create(courseData);
+
+  // Tạo thông báo hệ thống cho admin
+  const admin = await User.find({ role: 'admin' });
+  if (admin) {
+    await notificationService.sendUserNotification(admin._id, {
+      title: `New course created: ${course.title}`,
+      message: `New course created: ${course.title} by ${instructorId}`,
+      isSystem: true
+    });
+  }
+  
 
   res.status(201).json({
     success: true,
@@ -351,8 +380,9 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
       if (req?.files?.sumaryVideo) {
         const videoFile = req.files.sumaryVideo[0];
         try {
-          const videoUrl = await updateFileOnGCS(course.sumaryVideo ,videoFile, courseData.courseId);
-          courseData.sumaryVideo = videoUrl;
+          const videoName = Date.now() + '_' + videoFile.originalname;
+          const videoUrl = await minio.uploadStream(videoName, videoFile.buffer, videoFile.size);
+          courseData.sumaryVideo = `${process.env.MINIO_URL}/${videoUrl.objectName}`;
         } catch (error) {
           return next(new ErrorResponse(`File upload failed: ${error.message}`, 500));
         }
@@ -360,8 +390,9 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
       if (req?.files?.photo) {
         const photoFile = req.files.photo[0];
         try {
-          const photoUrl = await updateFileOnGCS(course.photo, photoFile, courseData.courseId);
-          courseData.photo = photoUrl;
+          const photoName = Date.now() + '_' + photoFile.originalname;
+          const photoUrl = await minio.uploadStream(photoName, photoFile.buffer, photoFile.size);
+          courseData.photo = `${process.env.MINIO_URL}/${photoUrl.objectName}`;
         } catch (error) {
           return next(new ErrorResponse(`File upload failed: ${error.message}`, 500));
         }
@@ -380,9 +411,10 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
     );
     
     // Cập nhật các modules nếu có
-    if (req.body.modules && Array.isArray(req.body.modules)) {
+    if (req.body.modules) {
+      const modules = JSON.parse(req.body.modules);
       // Xử lý từng module một
-      await Promise.all(req.body.modules.map(async (moduleData) => {
+      await Promise.all(modules.map(async (moduleData) => {
         if (moduleData._id) {
           // Cập nhật module hiện có
           const module = await Module.findById(moduleData._id);
@@ -460,6 +492,8 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
  * @access    Private (Admin)
  */
 export const approveCourse = asyncHandler(async (req, res, next) => {
+  const { isApproved, feedback } = req.body;
+  const notificationService = getNotificationService();
   // Chỉ admin mới có quyền phê duyệt
   if (req.user.role !== 'admin') {
     return next(new ErrorResponse(`User ${req.user.id} is not authorized to approve courses`, 403));
@@ -471,10 +505,23 @@ export const approveCourse = asyncHandler(async (req, res, next) => {
     return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
   }
   
-  // Cập nhật trạng thái phê duyệt
-  course.isApproved = true;
-  course.approvedBy = req.user.id;
-  await course.save();
+  if (isApproved) {
+    course.isApproved = true;
+    course.approvedBy = req.user.id;
+    await course.save();
+    await notificationService.sendUserNotification(course.instructor, {
+      title: `Course approved: ${course.title}`,
+      message: `Course approved: ${course.title} by ${req.user.id}`,
+    });
+  }
+  else {
+    course.isApproved = false;
+    await course.save();
+    await notificationService.sendUserNotification(course.instructor, {
+      title: `Course rejected: ${course.title}`,
+      message: `Course rejected: ${course.title} because of ${feedback}`,
+    });
+  }
   
   res.status(200).json({ 
     success: true, 
@@ -488,7 +535,7 @@ export const approveCourse = asyncHandler(async (req, res, next) => {
  * @access    Private (Student, Admin)
  */
 export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
-  const userId = req.user.id;
+  const userId = req.user._id;
   
   // Tìm thông tin người dùng và các khóa học đã đăng ký
   const user = await User.findById(userId)
@@ -575,4 +622,21 @@ export const deleteCourse = asyncHandler(async (req, res, next) => {
   } catch (error) {
     return next(error);
   }
+});
+
+export const getCourseStats = asyncHandler(async (req, res, next) => {
+  const courses = await Course.find({});
+  const totalCourses = courses.length;
+  const totalEnrollments = courses.reduce((sum, course) => sum + course.enrollments, 0);
+  const totalRevenue = courses.reduce((sum, course) => sum + course.price, 0);
+  const pendingCourses = courses.filter(course => course.isAprroved === false);
+  const publishedCourses = courses.filter(course => course.status === 'published');
+  const unpublishedCourses = courses.filter(course => course.status !== 'published');
+  const popularCourses = courses.sort((a, b) => b.enrollments - a.enrollments).slice(0, 5);
+
+
+  res.status(200).json({
+    success: true,
+    data: { totalCourses, totalEnrollments, totalRevenue, pendingCourses, publishedCourses, unpublishedCourses, popularCourses }
+  });
 });

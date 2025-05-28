@@ -19,7 +19,7 @@ const CourseSchema = new Schema({
     description: {
         type: String,
         required: true,
-        maxlength: [1000, 'Description can not be more than 500 characters']
+        maxlength: [10000, 'Description can not be more than 10000 characters']
     },
     instructor: {
         type: mongoose.Schema.Types.ObjectId, // Reference to Users Collection

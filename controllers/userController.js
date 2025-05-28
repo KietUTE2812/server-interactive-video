@@ -6,6 +6,9 @@ import bcrypt from "bcryptjs";
 import { v4 as uuidv4 } from 'uuid';
 import jwt from 'jsonwebtoken';
 import ErrorResponse from "../utils/ErrorResponse.js";
+import Group from '../models/Group.js';
+import Payment from '../models/Payment.js';
+import notificationService from '../services/notificationService.js';
 
 /**
  * Helper function to create a standardized API response
@@ -605,10 +608,6 @@ const logoutCtrl = asyncHandler(async (req, res, next) => {
     const cookie = req.headers.cookie;
     const refreshToken = getCookieValue(cookie, 'refreshToken');
     
-    if (!refreshToken) {
-        return next(new ErrorResponse('No active session found', 400));
-    }
-    
     try {
         // Clear refresh token in DB
         await User.findOneAndUpdate(
@@ -674,17 +673,28 @@ const getAllUserCtrl = asyncHandler(async (req, res, next) => {
     if (filters.status) {
         query.status = filters.status;
     }
+
+
     
     // Handle pagination
     const parsedLimit = parseInt(limit);
     const parsedPage = parseInt(page);
     
     // Fetch users
-    const users = await User.find(query)
+    let users = await User.find(query)
         .select('profile email username role status')
         .limit(parsedLimit)
         .skip(parsedLimit * (parsedPage - 1))
         .sort({ createdAt: -1 });
+
+    if (filters.isPaid === 'true') {
+        const paidUsers = await Payment.find({userId: {$in: users.map(user => user._id)}});
+        users = users.filter(user => paidUsers.some(paidUser => paidUser.userId.toString() === user._id.toString()));
+    }
+    else if (filters.isPaid === 'false') {
+        const unpaidUsers = await Payment.find({userId: {$in: users.map(user => user._id)}});
+        users = users.filter(user => !unpaidUsers.some(unpaidUser => unpaidUser.userId.toString() === user._id.toString()));
+    }
         
     // Get total count for pagination
     const total = await User.countDocuments(query);
@@ -701,6 +711,135 @@ const getAllUserCtrl = asyncHandler(async (req, res, next) => {
     });
 });
 
+// @desc    GroupUser 
+// @route   POST /api/v1/users/groups
+// @access  Private/Admin/Instructor
+const groupUserCtrl = asyncHandler(async (req, res, next) => {
+    const {userIds, groupName, description} = req.body;
+    
+    const existingGroup = await Group.findOne({ name: groupName });
+    if (existingGroup) {
+        return next(new ErrorResponse('Group already exists', 400));
+    }
+
+    const group = await Group.create({
+        name: groupName,
+        description: description,
+        users: userIds
+    });
+
+    await group.save();
+
+
+
+    res.status(200).json(createResponse(
+        true,
+        "Group created successfully",
+        group
+    ));
+
+});
+
+// @desc    Get all groups
+// @route   GET /api/v1/users/groups
+// @access  Private/Admin/Instructor
+const getAllGroupsCtrl = asyncHandler(async (req, res, next) => {
+    const groups = await Group.find().populate('users', 'profile email username role status');
+
+
+
+    res.status(200).json(createResponse(
+        true,
+        "Groups fetched successfully",
+        groups
+    ));
+});
+
+// @desc    Get all users in a group
+// @route   GET /api/v1/groups/:groupId
+// @access  Private/Admin/Instructor
+const getAllUsersInGroupCtrl = asyncHandler(async (req, res, next) => {
+    const groupId = req.params.groupId;
+    const group = await Group.findById(groupId);
+
+    res.status(200).json(createResponse(
+        true,
+        "Users in group fetched successfully",
+        group
+    ));
+});
+
+// @desc    Add user to group
+// @route   POST /api/v1/groups/:groupId
+// @access  Private/Admin/Instructor
+const addUserToGroupCtrl = asyncHandler(async (req, res, next) => {
+    const groupId = req.params.groupId;
+    const { userId } = req.body;
+
+    const group = await Group.findById(groupId);
+    group.users.push(userId);
+    await group.save();
+
+    res.status(200).json(createResponse(
+        true,
+        "User added to group successfully",
+        group
+    ));
+    
+});
+
+// @desc    Remove user from group
+// @route   DELETE /api/v1/groups/:groupId
+// @access  Private/Admin/Instructor
+const removeUserFromGroupCtrl = asyncHandler(async (req, res, next) => {
+    const groupId = req.params.groupId;
+    const { userId } = req.body;
+
+    const group = await Group.findById(groupId);
+    group.users = group.users.filter(id => id.toString() !== userId);
+    await group.save(); 
+
+    res.status(200).json(createResponse(
+        true,
+        "User removed from group successfully",
+        group
+    ));
+    
+});
+
+// @desc    Delete group
+// @route   DELETE /api/v1/groups/:groupId
+// @access  Private/Admin/Instructor
+const deleteGroupCtrl = asyncHandler(async (req, res, next) => {
+    const groupId = req.params.groupId;
+    await Group.findByIdAndDelete(groupId);
+
+    res.status(200).json(createResponse(
+        true,
+        "Group deleted successfully"
+    ));
+});
+
+// @desc    Get stats of users  
+// @route   GET /api/v1/users/stats
+// @access  Private/Admin/Instructor
+const getStatsUserCtrl = asyncHandler(async (req, res, next) => {
+    const totalUsers = await User.find().countDocuments();
+    const activeUsers = await User.find({status: 'active'}).countDocuments();
+    const inactiveUsers = await User.find({status: 'inactive'}).countDocuments();
+    const removedUsers = await User.find({status: 'removed'}).countDocuments();
+    const newUsers = await User.find({createdAt: {$gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)}}).countDocuments();
+    const students = await User.find({role: 'student'}).countDocuments();
+    const instructors = await User.find({role: 'instructor'}).countDocuments();
+    const admins = await User.find({role: 'admin'}).countDocuments();
+
+    res.status(200).json(createResponse(
+        true,
+        "Stats fetched successfully",
+        {totalUsers, activeUsers, inactiveUsers, removedUsers, newUsers, students, instructors, admins}   
+    ));
+});
+
 export default {
     registerUserCtrl,
     loginUserCtrl,
@@ -713,5 +852,12 @@ export default {
     logoutCtrl,
     verifyAccountCtrl,
     getAllUserCtrl,
-    updateUserByAdminCtrl
+    updateUserByAdminCtrl,
+    groupUserCtrl,
+    getAllGroupsCtrl,
+    getAllUsersInGroupCtrl,
+    addUserToGroupCtrl,
+    removeUserFromGroupCtrl,
+    deleteGroupCtrl,
+    getStatsUserCtrl
 };

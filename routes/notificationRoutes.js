@@ -1,4 +1,4 @@
-﻿import express from 'express';
+import express from 'express';
 import notificationController from '../controllers/notificationController.js';
 import { protect, authorize } from '../middlewares/auth.js';
 
@@ -9,22 +9,19 @@ router.use(protect);
 
 // User notification routes
 router.route('/')
-    .get(protect, notificationController.getNotifications);
+    .get(notificationController.getNotifications);
 
 router.route('/read-all')
-    .put(protect, notificationController.markAllNotificationsAsRead);
+    .put(notificationController.markAllNotificationsAsRead);
 
-router.route('/detail/:id')
-    .get(protect, notificationController.getNotification)
-    .delete(protect, notificationController.deleteNotification);
+router.route('/:id')
+    .get(notificationController.getNotification)
+    .delete(notificationController.deleteNotification);
 
 router.route('/:id/read')
-    .put(protect, notificationController.markNotificationAsRead);
+    .put(notificationController.markNotificationAsRead);
 
 // Admin only routes for sending notifications
-router.route('/admin')
-    .get(authorize('admin'), notificationController.getAdminNotifications);
-
 router.route('/user/:userId')
     .post(authorize('admin'), notificationController.sendUserNotification);
 
@@ -33,6 +30,5 @@ router.route('/group/:groupName')
 
 router.route('/broadcast')
     .post(authorize('admin'), notificationController.sendBroadcastNotification);
-
 
 export default router; 
