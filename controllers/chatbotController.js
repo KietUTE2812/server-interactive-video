@@ -150,12 +150,12 @@ export const getChatHistory = asyncHandler(async (req, res) => {
 
   const history = await ChatHistory.findOne({ userId })
     .select('messages userId createdAt updatedAt')
-    .lean();
+    .lean()
   if (!history) return res.json({ success: true, data: [], total: 0 });
 
   const total = history.messages.length;
-  const start = (parseInt(page) - 1) * parseInt(limit);
-  const end = start + parseInt(limit);
+  const end = total;
+  const start = end - parseInt(limit);
   const messages = history.messages.slice(start, end);
 
   return res.json({

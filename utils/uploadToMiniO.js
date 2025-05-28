@@ -5,11 +5,11 @@ dotenv.config();
 class MiniO {
     constructor() {
         this.minioClient = new Minio.Client({
-            endPoint: process.env.MINIO_ENDPOINT,
+            endPoint: '40.81.24.159',
             port: parseInt(process.env.MINIO_PORT) || 9000,
             useSSL: false,
-            accessKey: process.env.MINIO_ACCESS_KEY,
-            secretKey: process.env.MINIO_SECRET_KEY
+            accessKey: 'kltnadmin', 
+            secretKey: 'Kiet@2003'
         });
     }
     config = (bucketName) => {
@@ -19,6 +19,23 @@ class MiniO {
             console.error('Error setting policy for bucket', err);
         });
         return this;
+    }
+    getBucket = async () => {
+        return new Promise((resolve, reject) => {
+            this.minioClient.listBuckets((err, buckets) => {
+                resolve(buckets);
+            });
+        });
+    }
+    getBucketPolicy = async (bucketName) => {
+        return new Promise((resolve, reject) => {
+            this.minioClient.getBucketPolicy(bucketName, (err, policy) => {
+                if (err) {
+                    reject(err);
+                }
+                resolve(policy);
+            });
+        });
     }
     uploadStream = async (objectName, stream, size) => {
         return new Promise((resolve, reject) => {

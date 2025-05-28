@@ -22,7 +22,8 @@ const uploadToGCS = async (file, folder = 'uploads') => {
     blobStream.on('error', err => reject(err));
 
     blobStream.on('finish', () => {
-      const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+      // const publicUrl = `https://storage.googleapis.com/${bucket.name}/${filename}`;
+      const publicUrl = getAuthUrl(folder + '/' + filename);
       resolve(publicUrl);
     });
 
@@ -57,4 +58,17 @@ const updateFileOnGCS = async (oldFileUrl, file, folder = 'uploads') => {
   }
 };
 
-export default { uploadToGCS, updateFileOnGCS };
+const getAuthUrl = async (filename) => {
+  const [files] = await bucket.getFiles();
+  const file = files.find(file => file.name === filename);
+  if (!file) {
+    return null;
+  }
+  const folder = file.id.split('%2F');
+  const url = `https://storage.cloud.google.com/${bucket.name}/${folder[0]}/${folder[1]}?authuser=2`;
+  return url;
+};
+
+// https://storage.cloud.google.com/kltn-tankiet-bucket/682bf39d74c417c7ac69058b/6160efb9-6e55-4f75-a52f-b839210aa182_ReactJS%20l%C3%83%C2%A0%20g%C3%83%C2%AC%20_%20T%C3%A1%C2%BA%C2%A1i%20sao%20n%C3%83%C2%AAn%20h%C3%A1%C2%BB%C2%8Dc%20ReactJS%20_%20Kh%C3%83%C2%B3a%20h%C3%A1%C2%BB%C2%8Dc%20ReactJS%20mi%C3%A1%C2%BB%C2%85n%20ph%C3%83%C2%AD.mp4?authuser=2
+
+export default { uploadToGCS, updateFileOnGCS, getAuthUrl };

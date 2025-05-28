@@ -16,8 +16,19 @@ const UserSchema = new Schema({
     facebookId: {
         type: String
     },
-    githubId: {
-        type: String
+    githubAuth: {
+        username: {
+            type: String,
+            default: ''
+        },
+        email: {
+            type: String,
+            default: ''
+        },
+        accessToken: {
+            type: String,
+            default: ''
+        }
     },
     username: {
         type: String,

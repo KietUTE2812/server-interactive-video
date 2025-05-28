@@ -9,7 +9,8 @@ import {
     getCourseByCourseId,
     getCourseByInstructor,
     getAllCoursebyUser,
-    deleteCourse
+    deleteCourse,
+    getCourseStats
 } from "../controllers/courseController.js";
 
 import {
@@ -88,7 +89,7 @@ const authorizeCourseAccess = async (req, res, next) => {
 // ===== PUBLIC OR AUTHENTICATED ROUTES =====
 // Lấy danh sách khóa học (ngườhập sẽ thi dùng đã đăng nấy các khóa học phù hợp với role)
 router.route('/')
-    .get(getCourses);
+    .get(protect, getCourses);
     
 router.route('/courseId/:id')
     .get(getCourseByCourseId);
@@ -151,6 +152,9 @@ router.route('/:id')
 // Phê duyệt khóa học - chỉ dành cho admin
 router.route('/:id/approve')
     .put(protect, authorize('admin'), approveCourse);
+
+router.route('/admin/stats')
+    .get(protect, authorize('admin'), getCourseStats);
 
 // ===== MODULE ROUTES =====
 router.route('/:id/modules')

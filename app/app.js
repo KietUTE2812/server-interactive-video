@@ -1,6 +1,7 @@
 import express from 'express'
 import dbConnect from "../config/dbConnect.js";
-import userRoutes from "../routes/usersRoute.js";
+import userRoute from "../routes/usersRoute.js";
+const { userRoutes, groupRoutes, statsRoutes } = userRoute;
 import paymentsRoute from "../routes/paymentsRoute.js";
 import conversationRoute from "../routes/conversationRoute.js";
 import { globalErrHandler, notFound } from "../middlewares/globalErrHandler.js";
@@ -24,6 +25,7 @@ import roadmapRoute from "../routes/roadmapRoute.js";
 import moduleRoute from "../routes/moduleRoute.js";
 // import chunkUpload from "../routes/ChunkUpload.js";
 import notificationRoute from "../routes/notificationRoute.js";
+import notificationRoutes from "../routes/notificationRoutes.js"; // New Kafka-based notification routes
 import videoRoute from "../routes/videoRoute.js";
 import progressRoute from "../routes/progressRoute.js";
 import moduleItemRoute from "../routes/moduleItemRoute.js";
@@ -31,8 +33,11 @@ import moduleItemRoute from "../routes/moduleItemRoute.js";
 import searchRoute from "../routes/searchRoute.js";
 import messageRoute from "../routes/messageRoute.js";
 import chatbotRoute from '../routes/chatbotRoute.js';
-
-
+import categoryRoute from "../routes/categoryRoute.js";
+import settingRoute from "../routes/settingRoute.js";
+import shortLinkRoute from '../routes/shortLinkRoute.js';
+import codespaceRoute from '../routes/codespaceRoute.js';
+import githubAuthRoutes from '../routes/githubAuth.js';
 // // Use environment variables for Redis connection
 // const redisHost = process.env.REDIS_HOST || 'localhost';
 // const redisPort = process.env.REDIS_PORT || 6379;
@@ -53,7 +58,7 @@ app.use(express.json({
 }))
 // Enable CORS
 app.use(cors({
-  origin: 'http://localhost:5173', // Hoặc dùng '*' nếu muốn cho phép mọi nguồn
+  origin: process.env.CLIENT_URL || 'http://localhost:5173', // Use environment variable for client URL
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Các phương thức được phép
   credentials: true, // Nếu bạn cần gửi cookie hoặc authentication headers
 }));
@@ -92,6 +97,8 @@ app.use((req, res, next) => {
 
 // Load the userRoutes
 app.use('/api/v1/users', userRoutes)
+app.use('/api/v1/groups', groupRoutes)
+app.use('/api/v1/stats', statsRoutes)
 app.use('/', authRoutes)
 app.use('/api/v1/auth', authRoute)
 app.use('/api/v1/coursegrades', courseGradeRoute);
@@ -106,13 +113,18 @@ app.use('/api/v1/roadmap', roadmapRoute)
 app.use('/api/v1/modules', moduleRoute)
 // app.use('/api/v1/uploads', chunkUpload)
 app.use('/api/v1/videos', videoRoute)
-app.use('/api/v1/notifications', notificationRoute)
+app.use('/api/v1/notifications', notificationRoute) // Legacy notification route
 app.use('/api/v1/progress', progressRoute)
 app.use('/api/v1/student', studentRoute)
 
 app.use('/api/v1/moduleitem', moduleItemRoute)
 app.use('/api/v1/search', searchRoute)
 app.use('/api/v1/chatbot', chatbotRoute);
+app.use('/api/v1/categories', categoryRoute);
+app.use('/api/v1/settings', settingRoute);
+app.use('/api/v1/shortlinks', shortLinkRoute);
+app.use('/api/v1/codespaces', codespaceRoute);
+app.use('/api/v1/github/auth', githubAuthRoutes);
 
 // Middleware xử lý lỗi
 app.use((err, req, res, next) => {

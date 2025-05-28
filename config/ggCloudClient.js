@@ -8,16 +8,28 @@ const __dirname = path.dirname(__filename);
 // Đường dẫn file JSON key tải về
 const keyFilename = path.join(__dirname, './gcs_key.json');
 
+// Khởi tạo Storage
 const storage = new Storage({ keyFilename });
 const bucket = storage.bucket('kltn-tankiet-bucket');
 
-bucket.setCorsConfiguration([
-    {
-        maxAgeSeconds: 3600,
-        method: ['GET', 'POST', 'PUT', 'DELETE'],
-        origin: ['http://localhost:3000', 'http://localhost:5173'],
-        responseHeader: ['Content-Type', 'Authorization'],
-    },
-]);
+// Thiết lập CORS
+async function setCors() {
+  await bucket.setMetadata({
+    cors: [
+      {
+        origin: ['http://localhost:5173'],
+        method: ['GET', 'HEAD', 'OPTIONS', 'POST', 'PUT', 'DELETE'],
+        responseHeader: [
+          'Content-Type',
+        ],
+        maxAgeSeconds: 3600
+      }
+    ]
+  });
+
+  console.log('✅ CORS configuration set successfully.');
+}
+
+setCors().catch(console.error);
 
 export default bucket;

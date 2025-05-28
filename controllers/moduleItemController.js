@@ -12,9 +12,9 @@ import minioClient from '../config/minioClient.js';
 
 import processAIResponse from '../utils/generatePromt.js';
 import GeminiAI from '../utils/GeminiAI.js';
+import minio from "../utils/uploadToMiniO.js";
 
-
-
+dotenv.config();
 // Module Items
 
 //@desc Create module item type supplement 
@@ -50,24 +50,17 @@ export const createModuleItemSupplement = asyncHandler(async (req, res, next) =>
     if (course.instructor.toString() !== req.user.id && req.user.role !== 'admin') {
         return next(new ErrorResponse(`User is not authorized to create module item`, 401));
     }
-    const bucketName = process.env.MINIO_BUCKET_NAME;
-    const objectName = Date.now() + '-' + req.file.originalname;
-
-    const bucketExists = await minioClient.bucketExists(bucketName);
-    if (!bucketExists) {
-        await minioClient.makeBucket(bucketName, 'us-east-1');
+    
+    let url = "";
+    try {
+        const fileName = Date.now() + '_' + req.file.originalname;  
+        const file = await minio.uploadStream(fileName, req.file.buffer, req.file.size);
+        url = `${process.env.MINIO_URL}/${file.objectName}`;
+    } catch (error) {
+        return next(new ErrorResponse('Error uploading file' + error, 500));
     }
 
-    await minioClient.putObject(
-        bucketName,
-        objectName,
-        req.file.buffer,
-        req.file.size,
-        {
-            'Content-Type': req.file.mimetype
-        }
-    );
-    const url = `${process.env.MINIO_URL}/${objectName}`;
+    
 
 
     const session = await mongoose.startSession();
@@ -89,8 +82,6 @@ export const createModuleItemSupplement = asyncHandler(async (req, res, next) =>
         // Use create with session in array format as per MongoDB best practices
         await ModuleItem.collection.dropIndexes();
         const [newModuleItem] = await ModuleItem.create([moduleItemData], { session });
-
-        console.log('New module item:', newModuleItem);
         // Update module
         await Module.findByIdAndUpdate(
             module._id,
@@ -172,27 +163,16 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
                 return next(new ErrorResponse(`User is not authorized to create module item`, 401));
             }
 
-            // Upload to MinIO with error handling
-            const bucketName = process.env.MINIO_BUCKET_NAME;
-            const objectName = `${Date.now()}-${req.file.originalname}`;
-
+            // Upload to GCS
+            const videoFile = req.file;
+            let videoUrl = "";
             try {
-                const bucketExists = await minioClient.bucketExists(bucketName);
-                if (!bucketExists) {
-                    await minioClient.makeBucket(bucketName, 'us-east-1');
-                }
-
-                await minioClient.putObject(
-                    bucketName,
-                    objectName,
-                    req.file.buffer,
-                    req.file.size,
-                    { 'Content-Type': req.file.mimetype }
-                );
-            } catch (minioError) {
+                const videoName = Date.now() + '_' + videoFile.originalname;
+                const file = await minio.uploadStream(videoName, videoFile.buffer, videoFile.size);
+                videoUrl = `${process.env.MINIO_URL}/${file.objectName}`;
+            } catch (error) {
                 await session.abortTransaction();
-                console.error('MinIO upload error:', minioError);
-                return next(new ErrorResponse('Error uploading file', 500));
+                return next(new ErrorResponse('Error uploading file' + error, 500));
             }
 
             // Process questions
@@ -215,9 +195,8 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
                 }));
 
             // Create video document
-            const url = `${process.env.MINIO_URL}/${objectName}`;
             const videoData = {
-                file: url.toString(),
+                file: videoUrl,
                 duration: req.body.duration,
                 questions: validQuestions,
             };
@@ -503,24 +482,14 @@ export const editSupplementByItemId = asyncHandler(async (req, res, next) => {
     //     return next(new ErrorResponse('No module item found with id', 404));
     // }
     //console.log('moduleItem', moduleItem);
-    const bucketName = process.env.MINIO_BUCKET_NAME;
-    const objectName = Date.now() + '-' + req.file.originalname;
-    const bucketExists = await minioClient.bucketExists(bucketName);
-    if (!bucketExists) {
-        await minioClient.makeBucket(bucketName, 'us-east-1');
+    let url = "";
+    try {
+        const fileName = Date.now() + '_' + req.file.originalname;  
+        const file = await minio.uploadStream(fileName, req.file.buffer, req.file.size);
+        url = `${process.env.MINIO_URL}/${file.objectName}`;
+    } catch (error) {
+        return next(new ErrorResponse('Error uploading file' + error, 500));
     }
-
-    await minioClient.putObject(
-        bucketName,
-        objectName,
-        req.file.buffer,
-        req.file.size,
-        {
-            'Content-Type': req.file.mimetype
-        }
-    );
-    const url = `${process.env.MINIO_URL}/${objectName}`;
-
     const session = await mongoose.startSession();
     try {
         // Start transaction
@@ -580,27 +549,6 @@ export const editLectureByItemId = asyncHandler(async (req, res, next) => {
                 writeConcern: { w: 'majority' }
             });
 
-            const bucketName = process.env.MINIO_BUCKET_NAME;
-            const objectName = `${Date.now()}-${req.file.originalname}`;
-
-            try {
-                const bucketExists = await minioClient.bucketExists(bucketName);
-                if (!bucketExists) {
-                    await minioClient.makeBucket(bucketName, 'us-east-1');
-                }
-
-                await minioClient.putObject(
-                    bucketName,
-                    objectName,
-                    req.file.buffer,
-                    req.file.size,
-                    { 'Content-Type': req.file.mimetype }
-                );
-            } catch (minioError) {
-                await session.abortTransaction();
-                console.error('MinIO upload error:', minioError);
-                return next(new ErrorResponse('Error uploading file', 500));
-            }
 
             // try {
             //     if (typeof questions === 'string') {
@@ -634,10 +582,10 @@ export const editLectureByItemId = asyncHandler(async (req, res, next) => {
             console.log("Parsed Questions Array:", parsedQuestionsArray);
 
 
-            console.log("Array question ", validQuestions);
-            const url = `${process.env.MINIO_URL}/${objectName}`;
+            const fileName = Date.now() + '_' + req.file.originalname;  
+            const file = await minio.uploadStream(fileName, req.file.buffer, req.file.size);
             const videoData = {
-                file: url.toString(),
+                file: `${process.env.MINIO_URL}/${file.objectName}`,
                 duration: req.body.duration,
                 questions: validQuestions,
             };

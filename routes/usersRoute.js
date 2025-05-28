@@ -8,6 +8,8 @@ import isAdmin from "../middlewares/isAdmin.js";
 import { checkAuth, verifyPassword } from "../controllers/authController.js";
 
 const userRoutes = express.Router();
+const groupRoutes = express.Router();
+const statsRoutes = express.Router();
 
 // Middleware để kiểm tra quyền truy cập thông tin người dùng
 // Cho phép admin hoặc chính người dùng đó truy cập
@@ -68,6 +70,15 @@ userRoutes.get('/',
   userCtrl.getAllUserCtrl
 );
 
+// ===== GROUP ROUTES =====
+groupRoutes.post('/', protect, authorize('admin'), userCtrl.groupUserCtrl); // Tạo group
+groupRoutes.get('/', protect, authorize('admin'), userCtrl.getAllGroupsCtrl); // Lấy danh sách tất cả các group
+groupRoutes.get('/:groupId', protect, authorize('admin'), userCtrl.getAllUsersInGroupCtrl); // Lấy danh sách tất cả các user trong group
+groupRoutes.post('/:groupId', protect, authorize('admin'), userCtrl.addUserToGroupCtrl); // Thêm user vào group
+groupRoutes.delete('/:groupId', protect, authorize('admin'), userCtrl.removeUserFromGroupCtrl); // Xóa user khỏi group
+groupRoutes.delete('/:groupId', protect, authorize('admin'), userCtrl.deleteGroupCtrl); // Xóa group
+
+
 // Cập nhật thông tin người dùng bởi admin - chỉ admin
 userRoutes.put('/update-by-admin/:userid', 
   protect, 
@@ -76,4 +87,6 @@ userRoutes.put('/update-by-admin/:userid',
   userCtrl.updateUserByAdminCtrl
 );
 
-export default userRoutes;
+statsRoutes.get('/', protect, authorize('admin'), userCtrl.getStatsUserCtrl);
+
+export default { userRoutes, groupRoutes, statsRoutes };

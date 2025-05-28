@@ -3,7 +3,8 @@
 ## Table of Contents
 
 1. [Introduction](#introduction)
-2. [API Documentation](#api-documentation)
+2. [System Architecture Overview](#system-architecture-overview)
+3. [API Documentation](#api-documentation)
    - [User API](#user-api)
    - [Course API](#course-api)
    - [Payment API](#payment-api)
@@ -19,14 +20,61 @@
    - [Notification API](#notification-api)
    - [Student API](#student-api)
    - [Chat API](#chat-api)
-   - [Livestream API](#livestream-api)
-3. [Authentication](#authentication-details)
-4. [Installation](#installation)
-5. [Environment Setup](#environment-setup)
+4. [Authentication](#authentication-details)
+5. [Installation](#installation)
+6. [Environment Setup](#environment-setup)
 
 ## Introduction
 
 The Backend Interactive Video Platform is a comprehensive solution for online education, providing APIs for user management, course creation, interactive learning content, programming exercises, and more. This system supports features like livestreaming, quizzes, progress tracking, and roadmap-based learning paths.
+
+## System Architecture Overview
+
+This section summarizes the main controllers and routes in the system, providing a high-level view of the backend architecture.
+
+### Controllers
+
+- **userController**: Handles user registration, authentication (email, Google, Facebook, GitHub), profile management, password reset, user grouping, and admin user management.
+- **courseController**: Manages course creation, listing, filtering, enrollment, module management, and approval workflow.
+- **programController**: Provides endpoints for programming exercises, code compilation, submission, and result analytics.
+- **notificationController**: Manages user notifications, including creation, delivery, and read status.
+- **moduleItemController**: Handles course module items such as lectures, quizzes, programming exercises, and interactive content.
+- **quizController**: Manages quiz creation, question management, attempts, and scoring.
+- **categoryController**: Handles course categories (CRUD).
+- **roadmapController**: Manages personalized learning paths and skill roadmaps.
+- **progressController**: Tracks user progress through courses and modules.
+- **courseGradeController**: Manages assignments, grading, and certificate generation.
+- **searchController**: Provides advanced search for courses, tags, levels, and instructors.
+- **videoController**: Handles video upload, storage, and playback tracking.
+- **studentController**: Manages student-specific endpoints (enrollment, learning history).
+- **chatbotController, conversationController, messageController**: Enable chat and messaging features.
+- **shortLinkController**: Manages short links for sharing resources.
+- **settingController**: Handles system settings and configuration.
+- **uploadController**: Manages file uploads.
+- **reviewController, courseReviewController**: Handle course reviews and ratings.
+- **authController**: Provides authentication helpers and password verification.
+- **recommendSystem**: Implements recommendation logic for personalized content.
+
+### Routes
+
+- **usersRoute**: User registration, login, profile, admin management, grouping.
+- **courseRoute**: Course listing, details, enrollment, module management.
+- **programRoute**: Programming problems, code execution, submission, analytics.
+- **notificationRoute/notificationRoutes**: User notification endpoints.
+- **moduleItemRoute**: CRUD for module items (lectures, quizzes, programming).
+- **quizRoute**: Quiz endpoints.
+- **categoryRoute**: Category management.
+- **roadmapRoute**: Roadmap and learning path endpoints.
+- **progressRoute**: Progress tracking.
+- **courseGradeRoute**: Assignment and grading endpoints.
+- **searchRoute**: Search endpoints for courses, tags, levels.
+- **videoRoute**: Video management.
+- **studentRoute**: Student-specific endpoints.
+- **chatbotRoute, conversationRoute, messageRoute**: Chat and messaging.
+- **shortLinkRoute**: Short link management.
+- **settingRoute**: System settings.
+- **authRoute/authRouteGithub/authRouteGoogle**: Authentication endpoints.
+- **codespaceRoute**: Codespace management for coding environments.
 
 ## API Documentation
 
@@ -215,18 +263,6 @@ The Chat API enables communication between users.
 - Message exchange
 - User presence
 - Notification integration
-
-### Livestream API
-
-Base URL: `/api/v1/learns/:id/livestreams`
-
-The Livestream API handles live video sessions.
-
-**Key Features:**
-- Livestream creation
-- Scheduling
-- Viewer management
-- Recording and replay
 
 ### User API Routes
 
