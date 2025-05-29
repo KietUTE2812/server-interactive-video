@@ -1,6 +1,7 @@
 import Conversation from "../models/Conversation.js";
 import Message from "../models/Message.js";
 import Notification from "../models/Notification.js";
+import Group from "../models/Group.js";
 export const handleSocketConnection = (io) => {
     const users = new Map(); // User online 
     const userSockets = new Map(); // Save user socket id
@@ -30,12 +31,20 @@ export const handleSocketConnection = (io) => {
         socket.on('disconnect', handleDisconnect);
 
         async function handleUserLogin({ userId, fullname, picture, role = 'student' }) {
+            console.log(`User ${userId} logged in`);
             if (!userId || !fullname) {
                 return socket.emit('error', { message: "Invalid user data" });
+            }
+            // Find group of user
+            const group = await Group.findOne({ users: { $in: [userId] } });
+            if (group) {
+                socket.join("group:" + group._id);
+                console.log(`User ${userId} joined group room ${group._id}`);
             }
             console.log(`User ${userId} logged in`);
             users.set(userId, { fullname, picture, online: true, lastSeen: new Date(), role });
             socket.join("user:" + userId);
+            console.log(`User ${userId} joined user room`);
             userSockets.set(socket.id, userId);
         }
 

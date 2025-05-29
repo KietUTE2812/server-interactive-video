@@ -14,6 +14,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.693.0",
     "@azure/msal-node": "^2.14.0",
+    "@google-cloud/storage": "^7.16.0",
     "@google/generative-ai": "^0.24.0",
     "@gradio/client": "^1.13.0",
     "@huggingface/inference": "^3.4.1",
@@ -30,6 +31,7 @@
     "crypto": "^1.0.1",
     "dateformat": "^5.0.3",
     "dotenv": "^16.4.7",
+    "exceljs": "^4.4.0",
     "express": "^4.21.1",
     "express-async-handler": "^1.2.0",
     "express-session": "^1.18.0",
@@ -39,6 +41,7 @@
     "ioredis": "^5.4.1",
     "isomorphic-fetch": "^3.0.0",
     "jsonwebtoken": "^9.0.2",
+    "kafka-node": "^5.0.0",
     "minio": "^8.0.2",
     "monacopilot": "^1.1.18",
     "mongodb": "^6.10.0",
@@ -47,7 +50,9 @@
     "multer": "^1.4.5-lts.1",
     "multer-gridfs-storage": "5.0.2",
     "multer-storage-cloudinary": "^4.0.0",
-    "nodemailer": "^6.9.15",
+    "nanoid": "^5.1.5",
+    "natural": "^8.0.1",
+    "nodemailer": "^7.0.3",
     "nodemon": "^3.1.7",
     "openai": "^4.72.0",
     "passport": "^0.7.0",
@@ -56,7 +61,7 @@
     "path": "^0.12.7",
     "querystring": "^0.2.1",
     "request": "^2.88.2",
-    "socket.io": "^4.8.0",
+    "socket.io": "^4.8.1",
     "uuid": "^10.0.0",
     "vnpay": "^1.6.0"
   }

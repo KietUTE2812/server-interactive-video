@@ -7,10 +7,11 @@
 
 # testing
 /coverage
-
+test.js
 # production
 /build
 .env
+/config/gcs_key.json
 # misc
 .DS_Store
 .env.local

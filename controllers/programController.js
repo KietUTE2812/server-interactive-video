@@ -568,10 +568,10 @@ function getFileSize(content) {
     return Math.round(blob / Math.pow(1024, i), 2) + ' ' + sizes[i];
 }
 
-const copilot = new CompletionCopilot(process.env.MISTRAL_API_KEY, {
-    provider: 'mistral',
-    model: 'codestral',
-})
+// const copilot = new CompletionCopilot(process.env.MISTRAL_API_KEY, {
+//     provider: 'mistral',
+//     model: 'codestral',
+// })
 
 export const codeCompletion = asyncHandler(async (req, res, next) => {
     try {

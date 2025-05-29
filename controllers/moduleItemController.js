@@ -3,6 +3,7 @@ import Course from "../models/Course.js";
 import asyncHandler from "../middlewares/asyncHandler.js";
 import ErrorResponse from "../utils/ErrorResponse.js";
 import mongoose from "mongoose";
+
 import Quiz from "../models/Quiz.js";
 import ProgramProblem from "../models/ProgramProblem.js";
 import { request } from "express";
@@ -13,6 +14,9 @@ import minioClient from "../config/minioClient.js";
 import processAIResponse from "../utils/generatePromt.js";
 import GeminiAI from "../utils/GeminiAI.js";
 import getGrokAPI from "../utils/grokAPI.js";
+import minio from "../utils/uploadToMiniO.js";
+
+dotenv.config();
 
 // Module Items
 
@@ -64,27 +68,21 @@ export const createModuleItemSupplement = asyncHandler(
         new ErrorResponse(`User is not authorized to create module item`, 401)
       );
     }
-    const bucketName = process.env.MINIO_BUCKET_NAME;
-    const objectName = Date.now() + "_" + req.file.originalname;
 
-    const bucketExists = await minioClient.bucketExists(bucketName);
-    if (!bucketExists) {
-      await minioClient.makeBucket(bucketName, "us-east-1");
-    }
+    
+    let url = "";
+    try {
+        const fileName = Date.now() + '_' + req.file.originalname;  
+        const file = await minio.uploadStream(fileName, req.file.buffer, req.file.size);
+        url = `${process.env.MINIO_URL}/${file.objectName}`;
+    } catch (error) {
+        return next(new ErrorResponse('Error uploading file' + error, 500));
+    }   
 
-    await minioClient.putObject(
-      bucketName,
-      objectName,
-      req.file.buffer,
-      req.file.size,
-      {
-        "Content-Type": req.file.mimetype,
-      }
-    );
-    const url = `${process.env.MINIO_URL}/${objectName}`;
 
     const session = await mongoose.startSession();
     try {
+
       // Start transaction
       await session.startTransaction();
 
@@ -123,6 +121,7 @@ export const createModuleItemSupplement = asyncHandler(
         success: true,
         data: newModuleItem,
       });
+
     } catch (error) {
       await session.abortTransaction();
       console.error("Error creating module item:", error);
@@ -186,6 +185,7 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
         );
       }
 
+
       // Authorization check
       if (
         course.instructor.toString() !== req.user.id &&
@@ -197,15 +197,64 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
         );
       }
 
-      // Upload to MinIO with error handling
-      const bucketName = process.env.MINIO_BUCKET_NAME;
-      const objectName = `${Date.now()}_${req.file.originalname}`;
+            // Upload to GCS
+            const videoFile = req.file;
+            let videoUrl = "";
+            try {
+                const videoName = Date.now() + '_' + videoFile.originalname;
+                const file = await minio.uploadStream(videoName, videoFile.buffer, videoFile.size);
+                videoUrl = `${process.env.MINIO_URL}/${file.objectName}`;
+            } catch (error) {
+                await session.abortTransaction();
+                return next(new ErrorResponse('Error uploading file' + error, 500));
+            }
 
-      try {
-        const bucketExists = await minioClient.bucketExists(bucketName);
-        if (!bucketExists) {
-          await minioClient.makeBucket(bucketName, "us-east-1");
-        }
+
+
+            const questionsArray = Array.isArray(questionData) ? questionData : [questionData];
+            const validQuestions = questionsArray
+                .filter(q => q.index !== null && q.question !== null && q.answers?.length > 0)
+                .map(q => ({
+                    ...q,
+                    answers: q.answers.filter(a => a.content !== null && a.isCorrect !== null)
+                }));
+
+            // Create video document
+            const videoData = {
+                file: videoUrl,
+                duration: req.body.duration,
+                questions: validQuestions,
+            };
+
+            const video = await Video.create([videoData], { session });
+
+            // Create module item
+            const moduleItemData = {
+                module: module._id,
+                title,
+                description,
+                type: 'lecture',
+                contentType: 'Video',
+                icon: 'video',
+                video: video[0]._id,
+            };
+
+            const newModuleItem = await ModuleItem.create([moduleItemData], { session });
+
+            // Update module with new item
+            await Module.findByIdAndUpdate(
+                module._id,
+                { $push: { moduleItems: newModuleItem[0]._id } },
+                { session, new: true, runValidators: true }
+            );
+
+            await session.commitTransaction();
+
+            return res.status(201).json({
+                success: true,
+                data: newModuleItem[0]
+            });
+
 
         await minioClient.putObject(
           bucketName,
@@ -756,6 +805,7 @@ export const editLectureByItemId = asyncHandler(async (req, res, next) => {
     } finally {
       session.endSession();
     }
+
   }
   // If we've exhausted all retries
   return next(
@@ -816,6 +866,7 @@ export const editQuizByItemId = asyncHandler(async (req, res, next) => {
       await session.abortTransaction();
       return next(new ErrorResponse(`No found quiz to update`, 404));
     }
+
 
     const updatedModuleItem = await ModuleItem.findByIdAndUpdate(
       itemId,
@@ -930,6 +981,7 @@ export const editProgrammingByItemId = asyncHandler(async (req, res, next) => {
       return next(new ErrorResponse(`Failed to update module item`, 400));
     }
 
+
     await session.commitTransaction();
     console.log("Updated Module Item", updatedModuleItem);
     return res.status(200).json({
@@ -944,6 +996,92 @@ export const editProgrammingByItemId = asyncHandler(async (req, res, next) => {
   }
 });
 
+// =======
+//     while (retryCount < maxRetries) {
+//         const session = await mongoose.startSession();
+//         try {
+//             session.startTransaction({
+//                 readConcern: { level: 'snapshot' },
+//                 writeConcern: { w: 'majority' }
+//             });
+
+
+//             // try {
+//             //     if (typeof questions === 'string') {
+//             //         questions = JSON.parse(questions);
+//             //     }
+//             // } catch (parseError) {
+//             //     await session.abortTransaction();
+//             //     return next(new ErrorResponse('Invalid questions format', 400));
+//             // }
+
+//             const questionsArray = Array.isArray(questions) ? questions : [questions];
+//             console.log("questionsArray", questionsArray);
+//             // const validQuestions = questionsArray
+//             //     .filter(q => q.index !== null && q.question !== null && q.answers?.length > 0)
+//             //     .map(q => ({
+//             //         ...q,
+//             //         answers: q.answers.filter(a => a.content !== null && a.isCorrect !== null)
+//             //     }));
+
+//             const parsedQuestionsArray = questionsArray.flatMap(q =>
+//                 typeof q === "string" ? JSON.parse(q) : q
+//             );
+
+//             const validQuestions = parsedQuestionsArray
+//                 .filter(q => q.index !== null && q.question !== null && q.answers?.length > 0)
+//                 .map(q => ({
+//                     ...q,
+//                     answers: q.answers.filter(a => a.content !== null && a.isCorrect !== null)
+//                 }));
+
+//             console.log("Parsed Questions Array:", parsedQuestionsArray);
+
+
+//             const fileName = Date.now() + '_' + req.file.originalname;  
+//             const file = await minio.uploadStream(fileName, req.file.buffer, req.file.size);
+//             const videoData = {
+//                 file: `${process.env.MINIO_URL}/${file.objectName}`,
+//                 duration: req.body.duration,
+//                 questions: validQuestions,
+//             };
+
+//             let moduleItem = await ModuleItem.findById(itemId).session(session);
+//             if (!moduleItem) {
+//                 await session.abortTransaction();
+//                 return next(new ErrorResponse(`No found module item with id ${itemId}`, 404));
+//             }
+//             console.log("videoData", videoData);
+
+//             const video = await Video.findByIdAndUpdate(
+//                 moduleItem.video,
+//                 {
+//                     $set: {
+//                         file: videoData.file,
+//                         duration: videoData.duration,
+//                         questions: videoData.questions.map(q => ({
+//                             index: q.index,
+//                             questionType: q.questionType,
+//                             question: q.question,
+//                             startTime: q.startTime,
+//                             answers: q.answers.map(a => ({
+//                                 content: a.content,
+//                                 isCorrect: a.isCorrect
+//                             }))
+//                         }))
+//                     }
+//                 },
+//                 {
+//                     session,
+//                     new: true,
+//                     runValidators: true
+//                 }
+//             )
+//             if (!video) {
+//                 await session.abortTransaction();
+//                 return next(new ErrorResponse(`No found video to update`, 404));
+//             }
+// >>>>>>> main
 
 function generatePrompt(currQuestion, selectedAnswer, historyAns) {
   // Extract question information
@@ -998,180 +1136,7 @@ Ensure the new question:
 4. Includes clear explanations for both correct and incorrect answers`;
 }
 
-// function generatePrompt(currQuestion, selectedAnswer, historyAns) {
-//   // Extract question information
-//   const { question, questionType, answers } = currQuestion;
 
-//   // Get the correct answer
-//   const correctAnswer =
-//     answers.find((ans) => ans.isCorrect)?.content || "Undefined answer";
-
-//   // Get the list of incorrect answers, formatted as bullet points
-//   const incorrectAnswers = answers
-//     .filter((ans) => !ans.isCorrect)
-//     .map((ans) => `- "${ans.content}"`)
-//     .join("\n");
-
-//   // Get the answer that the user selected
-//   const selectedAnswerText =
-//     answers.find((ans) => ans._id === selectedAnswer[0])?.content ||
-//     "Undefined answer";
-
-//   // Check if the selected answer is correct
-//   const isSelectedCorrect =
-//     answers.find((ans) => ans._id === selectedAnswer[0])?.isCorrect || false;
-//   const correctnessMsg = isSelectedCorrect ? "**correct**" : "**incorrect**";
-
-//   // Construct the system and user messages
-//   return [
-
-//     {
-//       role: "user",
-//       content: `
-// Create a new question in the "${questionType}" format, similar in content to the following question:
-// "${question}"
-
-// Additional information:
-// - Correct answer in the original question: "${correctAnswer}"
-// - Incorrect answers in the original question:
-// ${incorrectAnswers}
-// - The user selected: "${selectedAnswerText}", which is ${correctnessMsg}.
-// - Answer history: ${JSON.stringify(historyAns, null, 2)}
-// - Original question characteristics: ${JSON.stringify(currQuestion, null, 2)}
-
-// Ensure the new question:
-// 1. Tests the same programming concept in a different way.
-// 2. Is not too similar to any questions in the history.
-// 3. Maintains the appropriate difficulty level.
-// 4. Includes clear explanations for both correct and incorrect answers.
-//       `,
-//     },
-//   ];
-// }
-
-// export const updateInteractiveQuestion = asyncHandler(
-//   async (req, res, next) => {
-//     const { currentQuestion, selectedAnswer, status, videoId } = req.body;
-//     console.log("currentQuestion", currentQuestion);
-//     console.log("selectedAnswer", selectedAnswer);
-//     console.log("videoId", videoId);
-//     console.log("status", status);
-//     const userId = req.user.id;
-//     const moduleItemId = req.params.itemId;
-
-//     if (!currentQuestion) {
-//       return next(new ErrorResponse("Please provide valid question data", 400));
-//     }
-//     if (!moduleItemId) {
-//       return next(new ErrorResponse("Please provide moduleItemId", 400));
-//     }
-//     if (!selectedAnswer) {
-//       return next(new ErrorResponse("Please provide selectedAnswer", 400));
-//     }
-
-//     const moduleItem = await ModuleItem.findById(moduleItemId);
-//     if (!moduleItem) {
-//       return res.status(404).json({ message: "Module item not found" });
-//     }
-
-//     const historyAns = currentQuestion.history
-//       .filter((ans) => ans.userId.toString() === userId.toString())
-//       .map((ans) => ({
-//         question: ans.question,
-//         answer: ans.answer,
-//         isCorrect: ans.isCorrect,
-//       }));
-
-//     console.log("historyAns", historyAns);
-//     console.log("status", status);
-
-//     // Update the history answer
-//     if (status === "correct") {
-//       await updateHistoryAnswer(
-//         currentQuestion,
-//         videoId,
-//         selectedAnswer,
-//         true,
-//         userId
-//       );
-//     } else if (status === "incorrect") {
-//       await updateHistoryAnswer(
-//         currentQuestion,
-//         videoId,
-//         selectedAnswer,
-//         false,
-//         userId
-//       );
-//       await createNewInteractiveQuestion(
-//         currentQuestion,
-//         selectedAnswer,
-//         videoId,
-//         userId
-//       );
-//     }
-//     // return res.status(200).json({
-//     //   success: true,
-//     //   data: formatResponse,
-//     // });
-//   }
-// );
-
-// export const preloadInteractiveQuestion = asyncHandler(
-//   async (req, res, next) => {
-//     const videoId = req.params.videoId;
-//     const userId = req.user.id;
-
-//     if (!videoId) {
-//       return next(new ErrorResponse("Please provide videoId", 400));
-//     }
-
-//     const video = await Video.findById(videoId);
-//     if (!video) {
-//       return res.status(404).json({ message: "Video not found" });
-//     }
-
-//     // Kiểm tra nếu người dùng đã có bất kỳ lịch sử nào trên video này
-//     const hasHistory = video.questions.some((q) =>
-//       q.history.some((h) => h.userId.toString() === userId)
-//     );
-
-//     if (hasHistory) {
-//       return res
-//         .status(200)
-//         .json({ success: true, message: "User already has question history" });
-//     }
-
-//     // Nếu chưa có → tạo câu hỏi dự phòng cho tất cả câu hỏi gốc
-//     for (const question of video.questions) {
-//       const historyAns = []; // Vì người dùng chưa từng trả lời => history trống
-//       const prompt = generatePrompt(question, historyAns);
-//       const result = await GeminiAI(prompt);
-//       if (result.error) {
-//         console.error("AI error:", result.error);
-//         continue; // bỏ qua nếu có lỗi AI
-//       }
-
-//       const aiQ = processAIResponse(result, question._id);
-
-//       question.history.push({
-//         userId,
-//         question: aiQ.question,
-//         answers: aiQ.answers,
-//         selectedAnswer: [],
-//         isCorrect: false,
-//         timestamp: new Date(),
-//         status: "not-started",
-//       });
-//     }
-
-//     await video.save();
-
-//     res.status(200).json({
-//       success: true,
-//       message: "Preloaded questions created successfully",
-//     });
-//   }
-// );
 
 // Tạo câu hỏi tương tác mới khi trả lời sai
 export async function createNewInteractiveQuestion(
