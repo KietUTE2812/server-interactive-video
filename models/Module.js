@@ -98,7 +98,17 @@ const VideoSchema = new Schema({
                 question: {
                     type: String,
                 },
-                answer: [{
+                answers: [{
+                    content: {
+                        type: String,
+                        trim: true,
+                    },
+                    isCorrect: {
+                    type: Boolean,
+                    default: false
+                }
+                }],
+                selectedAnswer: [{
                     type: String,
                     trim: true,
                 }],
@@ -109,7 +119,13 @@ const VideoSchema = new Schema({
                 timestamp: {
                     type: Date,
                     default: Date.now
+                },
+                status: {
+                    type: String,
+                    enum: ['in-progress', 'completed', 'unanswered'],
+                    default: 'unanswered'
                 }
+                
             }]
         }
     ],

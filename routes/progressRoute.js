@@ -6,11 +6,14 @@ import { authorize, protect } from "../middlewares/auth.js";
 const router = express.Router();
 
 router.route("/").get(isLoggedin, progressController.getProgress);
+// router
+//   .route("/:id/video")
+//   .put(protect, authorize("student"), progressController.updateVideoProgress);
 router
-  .route("/:id/video")
-  .put(isLoggedin, progressController.updateVideoProgress);
+  .route("/lecture/:id")
+  .put(protect, authorize("student"), progressController.updateLectureProgress);
 router
-  .route("/:id/supplement")
+  .route("/supplement/:id")
   .put(isLoggedin, progressController.updateSupplementProgress);
 
 router
@@ -34,5 +37,5 @@ router
 
 router
   .route(`/module/:id`)
-  .get(protect , authorize("student"), progressController.getModuleProgress);
+  .get(protect, authorize("student"), progressController.getModuleProgress);
 export default router;
