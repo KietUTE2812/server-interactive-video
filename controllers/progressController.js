@@ -7,141 +7,164 @@ import Course from "../models/Course.js";
 import ModuleProgress from "../models/Progress.js";
 
 /**
- * @desc    Cập nhật tiến độ xem video
- * @route   PUT /api/v1/progress/:id/video
+ * @desc    Cập nhật tiến độ xem video theo moduleItemProgress ID
+ * @route   PUT /api/v1/progress/lecture/:id
  * @access  Private
  */
-const updateVideoProgress = asyncHandler(async (req, res, next) => {
+const updateLectureProgress = asyncHandler(async (req, res, next) => {
   const { progressVideo } = req.body;
-  const { id } = req.params;
+  const { id: moduleItemProgressId } = req.params;
   const userId = req.user.id;
+
+  console.log("Updating lecture progress for moduleItemProgress ID:", moduleItemProgressId);
+  console.log("Progress video data:", progressVideo);
+
   const session = await mongoose.startSession();
   session.startTransaction();
 
   try {
-    const progress = await Progress.findById(id)
-      .populate("moduleItemProgresses.moduleItemId")
-      .session(session);
+    // Tìm progress document chứa moduleItemProgress cần cập nhật
+    const progress = await Progress.findOne({
+      userId: userId,
+      "moduleItemProgresses.moduleItemId": moduleItemProgressId,
+    }).session(session);
 
     if (!progress) {
       await session.abortTransaction();
+      session.endSession();
       return next(new ErrorResponse("Progress not found", 404));
     }
 
-    const module = await Module.findById(progress.moduleId)
-      .populate("moduleItems")
-      .session(session);
+    console.log("Found progress document:", progress._id);
 
-    if (!module) {
-      await session.abortTransaction();
-      return next(new ErrorResponse("Module not found", 404));
-    }
-
-    const videoId = progressVideo.videoId;
-    const moduleItem = module.moduleItems.find(
-      (item) => item.video && item.video.toString() === videoId
+    // Tìm moduleItemProgress hiện tại
+    const currentModuleItemProgress = progress.moduleItemProgresses.find(
+      item => item.moduleItemId.toString() === moduleItemProgressId
     );
 
-    if (!moduleItem) {
+    if (!currentModuleItemProgress) {
       await session.abortTransaction();
-      return next(new ErrorResponse("Video not found in the module", 404));
+      session.endSession();
+      return next(new ErrorResponse("Module item progress not found", 404));
     }
 
-    // Tìm tiến độ hiện tại của video
-    let videoProgress = progress.moduleItemProgresses.find(
-      (item) => item.moduleItemId._id.toString() === moduleItem._id.toString()
-    );
-
-    const isCompleted = progressVideo.completionPercentage >= 95; // Coi như hoàn thành khi đạt 95% để tránh các vấn đề về kỹ thuật
+    const isCompleted = progressVideo.completionPercentage >= 90;
 
     // Nếu đã hoàn thành và đang thử hoàn thành lại, không cần cập nhật
-    if (videoProgress && videoProgress.status === "completed" && isCompleted) {
+    if (currentModuleItemProgress.status === "completed" && isCompleted) {
       await session.abortTransaction();
+      session.endSession();
       return res.status(200).json({
         success: true,
         data: progress,
-        message: "Video already completed",
+        message: "Lecture already completed",
       });
     }
 
-    // Cập nhật thông tin tiến độ
-    if (videoProgress) {
-      // Chỉ cập nhật trạng thái thành hoàn thành khi đạt ngưỡng
-      if (isCompleted && videoProgress.status !== "completed") {
-        videoProgress.status = "completed";
-        videoProgress.completedAt = new Date();
-      } else if (!isCompleted) {
-        videoProgress.status = "in-progress";
-      }
+    // Kiểm tra xem completion percentage mới có lớn hơn hiện tại không
+    const completionCheck = progress.canUpdateCompletionPercentage(moduleItemProgressId, progressVideo.completionPercentage);
 
-      // Cập nhật các thông số khác
-      videoProgress.timeSpent = Math.max(
-        progressVideo.timeSpent || 0,
-        videoProgress.timeSpent || 0
-      );
-      videoProgress.attempts = (videoProgress.attempts || 0) + 1;
-      videoProgress.completionPercentage = progressVideo.completionPercentage;
-      videoProgress.result.video = {
-        ...videoProgress.result.video,
-        ...progressVideo,
-        lastUpdated: new Date(),
-      };
-
-      // Cập nhật lại mảng moduleItemProgresses
-      progress.moduleItemProgresses = progress.moduleItemProgresses.map(
-        (item) =>
-          item._id.toString() === videoProgress._id.toString()
-            ? videoProgress
-            : item
-      );
-    } else {
-      // Tạo mới tiến độ cho video
-      const newProgress = {
-        moduleItemId: moduleItem._id,
-        status: isCompleted ? "completed" : "in-progress",
-        completionPercentage: progressVideo.completionPercentage,
-        startedAt: new Date(),
-        completedAt: isCompleted ? new Date() : null,
-        timeSpent: progressVideo.timeSpent || 0,
-        attempts: 1,
-        result: {
-          video: {
-            ...progressVideo,
-            lastUpdated: new Date(),
-          },
-        },
-      };
-      progress.moduleItemProgresses.push(newProgress);
+    if (!completionCheck.canUpdate) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(200).json({
+        success: true,
+        data: progress,
+        message: completionCheck.reason,
+        currentCompletion: completionCheck.currentPercentage,
+        newCompletion: completionCheck.newPercentage
+      });
     }
 
-    // Cập nhật tiến độ tổng thể của module
-    //await updateModuleCompletionPercentage(progress, module, session);
+    console.log(`✅ Completion percentage will increase: ${completionCheck.currentPercentage}% → ${completionCheck.newPercentage}% (+${completionCheck.increase}%)`);
 
-    // Lưu tiến độ và commit transaction
-    await progress.save({ session });
+    // Chuẩn bị dữ liệu cập nhật
+    const currentTime = new Date();
+    const { currentPercentage, newPercentage } = completionCheck;
+    const updateData = {
+      completionPercentage: newPercentage,
+      timeSpent: (currentModuleItemProgress.timeSpent || 0) + (progressVideo.timeSpent || 0),
+      attempts: (currentModuleItemProgress.attempts || 0) + 1,
+    };
+
+    // Cập nhật trạng thái dựa trên completion percentage mới
+    const isNewCompleted = newPercentage >= 90;
+    if (isNewCompleted && currentModuleItemProgress.status !== "completed") {
+      updateData.status = "completed";
+      updateData.completedAt = currentTime;
+    } else if (newPercentage > 0) {
+      updateData.status = "in-progress";
+      if (!currentModuleItemProgress.startedAt) {
+        updateData.startedAt = currentTime;
+      }
+    }
+
+    // Cập nhật result.video
+    const existingVideoResult = currentModuleItemProgress.result?.video || {};
+
+    updateData.result = {
+      video: {
+        ...existingVideoResult,
+        watchedDuration: progressVideo.watchedDuration || 0,
+        totalDuration: progressVideo.totalDuration || 0,
+        lastPosition: progressVideo.lastPosition || 0,
+        completionPercentage: progressVideo.completionPercentage,
+        lastUpdated: currentTime,
+      }
+    };
+
+    // Sử dụng method helper để cập nhật an toàn
+    const updatedModuleItemProgress = progress.updateModuleItemProgress(moduleItemProgressId, updateData);
+
+    console.log("Module item progress updated:", {
+      status: updatedModuleItemProgress.status,
+      completionPercentage: updatedModuleItemProgress.completionPercentage
+    });
+
+    // Debug: Log trạng thái trước khi save
+    console.log("🔍 BEFORE SAVE:");
+    progress.debugModuleItemProgress(moduleItemProgressId);
+
+    // Lưu tiến độ với session
+    const savedProgress = await progress.save({ session });
+
+    // Debug: Log trạng thái sau khi save
+    console.log("🔍 AFTER SAVE:");
+    savedProgress.debugModuleItemProgress(moduleItemProgressId);
+
+    // Commit transaction trước khi trả về response
     await session.commitTransaction();
     session.endSession();
 
-    // Cập nhật tiến độ toàn khóa học (async, không đợi)
-    // updateCourseProgress(userId, progress.courseId).catch((err) =>
-    //   console.error("Error updating course progress:", err)
-    // );
+    console.log("Lecture progress updated successfully");
 
     res.status(200).json({
       success: true,
-      data: progress,
-      message: isCompleted
-        ? "Video completed successfully"
-        : "Video progress updated",
+      data: {
+        progress: savedProgress,
+        updatedItem: savedProgress.moduleItemProgresses.find(
+          item => item.moduleItemId.toString() === moduleItemProgressId
+        )
+      },
+      message: isNewCompleted
+        ? `Lecture completed successfully (${currentPercentage}% → ${newPercentage}%)`
+        : `Lecture progress updated (${currentPercentage}% → ${newPercentage}%)`,
     });
+
   } catch (error) {
-    await session.abortTransaction();
+    // Chỉ abort nếu transaction chưa được commit
+    if (session.inTransaction()) {
+      await session.abortTransaction();
+    }
     session.endSession();
+    console.error("Error updating lecture progress:", error);
     return next(
-      new ErrorResponse(`Error updating video progress: ${error.message}`, 400)
+      new ErrorResponse(`Error updating lecture progress: ${error.message}`, 500)
     );
   }
 });
+
+
 
 const updateSupplementProgress = asyncHandler(async (req, res, next) => {
   const { progressSupplement } = req.body;
@@ -234,8 +257,8 @@ const updateSupplementProgress = asyncHandler(async (req, res, next) => {
       supplementProgress.completionPercentage = isCompleted
         ? 100
         : progressSupplement.completionPercentage ||
-          supplementProgress.completionPercentage ||
-          0;
+        supplementProgress.completionPercentage ||
+        0;
 
       if (isCompleted && !supplementProgress.completedAt) {
         supplementProgress.completedAt = new Date();
@@ -451,11 +474,11 @@ const updateProgrammingProgress = asyncHandler(async (req, res, next) => {
     moduleItemProgress.completionPercentage = isCompleted
       ? 100
       : Math.min(
-          100,
-          progressProgramming.score ||
-            moduleItemProgress.completionPercentage ||
-            0
-        );
+        100,
+        progressProgramming.score ||
+        moduleItemProgress.completionPercentage ||
+        0
+      );
 
     // Cập nhật thời gian
     if (isCompleted && !moduleItemProgress.completedAt) {
@@ -604,13 +627,13 @@ const getProgress = asyncHandler(async (req, res, next) => {
   } else {
     // Trường hợp bình thường
     courseId = req.query.courseId;
-  } 
+  }
 
   if (!courseId) {
     return next(new ErrorResponse("Course ID is required", 400));
   }
   console.log("courseId:", courseId);
-  
+
   try {
     // Tìm progress hiện có
     let progress = await Progress.find({ userId, courseId })
@@ -623,57 +646,56 @@ const getProgress = asyncHandler(async (req, res, next) => {
     // Nếu không có progress, tạo mới
     if (!progress || progress.length === 0) {
       console.log("Progress not found, creating new records");
-      
+
       // Lấy thông tin về các module của khóa học
       const course = await Course.findById(courseId).populate({
-        path: 'modules',
+        path: "modules",
         populate: {
-          path: 'moduleItems'
-        }
+          path: "moduleItems",
+        },
       });
-      
+
       if (!course) {
         return next(new ErrorResponse("Course not found", 404));
       }
-      
+
       // Tạo progress mới cho mỗi module
       const progressPromises = [];
-      
+
       for (const moduleId of course.modules) {
         // Tìm module chi tiết
-        const module = await Module.findById(moduleId)
-          .populate('moduleItems');
-        
+        const module = await Module.findById(moduleId).populate("moduleItems");
+
         if (module) {
           // Tạo progress items cho các module items
-          const moduleItemProgresses = module.moduleItems.map(item => ({
+          const moduleItemProgresses = module.moduleItems.map((item) => ({
             moduleItemId: item._id,
-            status: 'not-started',
+            status: "not-started",
             completionPercentage: 0,
             attempts: 0,
-            timeSpent: 0
+            timeSpent: 0,
           }));
-          
+
           // Tạo progress cho module
           const newProgress = new Progress({
             userId,
             courseId,
             moduleId: module._id,
-            status: 'not-started',
+            status: "not-started",
             completionPercentage: 0,
             moduleItemProgresses,
             totalTimeSpent: 0,
-            averageScore: 0
+            averageScore: 0,
           });
-          
+
           progressPromises.push(newProgress.save());
         }
       }
-      
+
       // Lưu tất cả progress
       if (progressPromises.length > 0) {
         progress = await Promise.all(progressPromises);
-        
+
         // Tải lại thông tin progress với populate
         progress = await Progress.find({ userId, courseId })
           .populate({
@@ -685,7 +707,7 @@ const getProgress = asyncHandler(async (req, res, next) => {
         console.log("No modules found for course");
         return next(new ErrorResponse("No modules found for this course", 404));
       }
-    }    // Sắp xếp theo thứ tự module
+    } // Sắp xếp theo thứ tự module
     progress.sort((a, b) => a.moduleId.index - b.moduleId.index);
 
     // Định nghĩa trọng số cho từng loại module item (giống như trong Progress.js)
@@ -693,7 +715,7 @@ const getProgress = asyncHandler(async (req, res, next) => {
       lecture: 3,
       quiz: 2,
       programming: 4,
-      supplement: 1
+      supplement: 1,
     };
 
     // Tính tổng tiến độ khóa học dựa trên trọng số của module items
@@ -703,29 +725,36 @@ const getProgress = asyncHandler(async (req, res, next) => {
     let completedModuleItems = 0;
 
     // Đếm tổng số module items và số module items đã hoàn thành, tính trọng số
-    progress.forEach(moduleProgress => {
-      moduleProgress.moduleItemProgresses.forEach(itemProgress => {
+    progress.forEach((moduleProgress) => {
+      moduleProgress.moduleItemProgresses.forEach((itemProgress) => {
         totalModuleItems++;
-        
+
         // Lấy thông tin module item
         const moduleItem = itemProgress.moduleItemId;
-        const itemType = moduleItem && moduleItem.type ? moduleItem.type : 
-                        (moduleItem && moduleItem.video ? 'lecture' : 
-                         moduleItem && moduleItem.quiz ? 'quiz' : 
-                         moduleItem && moduleItem.programming ? 'programming' : 'supplement');
-        
+        const itemType =
+          moduleItem && moduleItem.type
+            ? moduleItem.type
+            : moduleItem && moduleItem.video
+              ? "lecture"
+              : moduleItem && moduleItem.quiz
+                ? "quiz"
+                : moduleItem && moduleItem.programming
+                  ? "programming"
+                  : "supplement";
+
         // Lấy trọng số cho loại item này
         const weight = ITEM_WEIGHTS[itemType] || 1;
-        
+
         // Cộng vào tổng trọng số
         totalWeight += weight;
-        
+
         if (itemProgress.status === "completed") {
           completedModuleItems++;
           completedWeight += weight;
         } else if (itemProgress.completionPercentage > 0) {
           // Nếu đã bắt đầu nhưng chưa hoàn thành, tính phần trăm theo tiến độ
-          const partialWeight = (weight * itemProgress.completionPercentage / 100);
+          const partialWeight =
+            (weight * itemProgress.completionPercentage) / 100;
           completedWeight += partialWeight;
         }
       });
@@ -733,15 +762,13 @@ const getProgress = asyncHandler(async (req, res, next) => {
 
     // Tính phần trăm hoàn thành khóa học dựa trên trọng số
     const courseCompletionPercentage =
-      totalWeight > 0
-        ? Math.round((completedWeight / totalWeight) * 100)
-        : 0;
-    
+      totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 100) : 0;
+
     // Tính phần trăm đơn giản để so sánh
     const simpleCompletionPercentage =
       totalModuleItems > 0
         ? Math.round((completedModuleItems / totalModuleItems) * 100)
-        : 0;    // Giữ lại thông tin về số lượng modules để tương thích ngược
+        : 0; // Giữ lại thông tin về số lượng modules để tương thích ngược
     const totalModules = progress.length;
     const completedModules = progress.filter(
       (p) => p.status === "completed"
@@ -750,7 +777,11 @@ const getProgress = asyncHandler(async (req, res, next) => {
     const count = progress.length;
     console.log("Progress count:", progress.length);
     //console.log(`Simple module items completion: ${completedModuleItems}/${totalModuleItems} = ${simpleCompletionPercentage}%`);
-    console.log(`Weighted module items completion: ${completedWeight.toFixed(2)}/${totalWeight} = ${courseCompletionPercentage}%`);    
+    console.log(
+      `Weighted module items completion: ${completedWeight.toFixed(
+        2
+      )}/${totalWeight} = ${courseCompletionPercentage}%`
+    );
     res.status(200).json({
       success: true,
       count,
@@ -772,7 +803,7 @@ const getProgress = asyncHandler(async (req, res, next) => {
           percentage: courseCompletionPercentage,
           completedWeight: parseFloat(completedWeight.toFixed(2)),
           totalWeight: totalWeight,
-          weights: ITEM_WEIGHTS
+          weights: ITEM_WEIGHTS,
         },
         percentage: courseCompletionPercentage, // Using the weighted calculation as the main percentage
       },
@@ -803,8 +834,8 @@ const getGradeByCourseId = asyncHandler(async (req, res, next) => {
     const parsedModuleItemIds = Array.isArray(moduleItemIds)
       ? moduleItemIds
       : moduleItemIds
-      ? [moduleItemIds].filter(Boolean)
-      : [];
+        ? [moduleItemIds].filter(Boolean)
+        : [];
 
     // Xây dựng query
     const query = {
@@ -874,7 +905,7 @@ const getGradeByCourseId = asyncHandler(async (req, res, next) => {
     const averageProgrammingScore =
       programmingScores.length > 0
         ? programmingScores.reduce((sum, score) => sum + score, 0) /
-          programmingScores.length
+        programmingScores.length
         : 0;
 
     // Tính điểm tổng hợp
@@ -1147,12 +1178,14 @@ const getDefaultResultByType = (type) => {
         },
       };
     case "reading":
+    case "supplement":
       return {
         reading: {
           status: "not-started",
         },
       };
     case "video":
+    case "lecture":
       return {
         video: {
           watchedDuration: 0,
@@ -1191,7 +1224,7 @@ const getModuleProgress = asyncHandler(async (req, res, next) => {
 });
 
 export default {
-  updateVideoProgress,
+  updateLectureProgress,
   updateSupplementProgress,
   updateProgrammingProgress,
   getProgrammingProgressByProblemId,
@@ -1200,3 +1233,4 @@ export default {
   getModuleItemProgress,
   getModuleProgress,
 };
+

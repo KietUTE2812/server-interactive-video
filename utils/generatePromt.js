@@ -1,352 +1,450 @@
+import { ObjectId } from 'mongodb';
+
 /**
  * Processes AI response and extracts a formatted question
  * 
  * @param {string} aiResponse - The full text response from the AI
- * @param {string} currQuestionId - The ID of the current question
+ * @param {string} currQuestionId - The ID of the current question (optional)
  * @returns {Object} - A properly formatted question object
  */
-function processAIResponse(aiResponse, currQuestionId) {
+function processAIResponse(aiResponse, currQuestionId = null) {
+   
+    
     try {
-        // Extract the JSON portion if it exists
-        const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
-        const jsonMatch = aiResponse.match(jsonRegex);
-
-        if (jsonMatch && jsonMatch[1]) {
-            let jsonString = jsonMatch[1].trim();
-
-            // Fix common JSON issues before parsing
-            jsonString = preprocessJson(jsonString);
-
-            // Try direct parsing with the preprocessed JSON
-            try {
-                const questionData = JSON.parse(jsonString);
-                const explanations = extractAnswerExplanations(aiResponse, questionData.answers);
-
-                return {
-                    ...questionData,
-                    _id: currQuestionId // Use the provided ID
-                };
-            } catch (jsonError) {
-                console.error("JSON parsing error:", jsonError);
-
-                // Create a clean version of the question directly from the AI response
-                return createCleanQuestion(aiResponse, currQuestionId);
-            }
-        } else {
-            // No JSON block found, extract structured data from the response
-            return createCleanQuestion(aiResponse, currQuestionId);
+        // First try to extract and parse JSON
+        const jsonResult = tryExtractAndParseJSON(aiResponse);
+        if (jsonResult.success) {
+            return formatQuestionData(jsonResult.data, currQuestionId);
         }
+        
+        // If JSON parsing fails, fall back to text extraction
+        console.warn("JSON parsing failed, falling back to text extraction");
+        return createQuestionFromText(aiResponse, currQuestionId);
+        
     } catch (error) {
         console.error("Error processing AI response:", error);
-        return {
-            error: true,
-            message: "Failed to process AI response: " + error.message,
-            originalResponse: aiResponse
-        };
+        return createErrorResponse(error, aiResponse);
     }
 }
 
 /**
- * Preprocesses JSON to fix common issues before parsing
- * 
- * @param {string} jsonString - The raw JSON string
- * @returns {string} - Cleaned JSON string
- */
-function preprocessJson(jsonString) {
-    // Fix unquoted property names
-    jsonString = jsonString.replace(/([{,]\s*)([a-zA-Z0-9_]+)(\s*:)/g, '$1"$2"$3');
-
-    // Fix trailing commas in arrays and objects
-    jsonString = jsonString.replace(/,(\s*[\]}])/g, '$1');
-
-    // Fix single quotes used instead of double quotes
-    jsonString = jsonString.replace(/(\w+)'/g, '$1"');
-    jsonString = jsonString.replace(/'(\w+)/g, '"$1');
-
-    // Replace all single quotes with double quotes for property values
-    // but only if they're not already within double quotes
-    let inDoubleQuotes = false;
-    let result = '';
-
-    for (let i = 0; i < jsonString.length; i++) {
-        const char = jsonString[i];
-
-        if (char === '"' && (i === 0 || jsonString[i - 1] !== '\\')) {
-            inDoubleQuotes = !inDoubleQuotes;
-            result += char;
-        } else if (char === "'" && !inDoubleQuotes) {
-            result += '"';
-        } else {
-            result += char;
-        }
-    }
-
-    return result;
-}
-
-/**
- * Creates a clean question object directly from AI response text
+ * Attempts to extract and parse JSON from AI response
  * 
  * @param {string} aiResponse - The full AI response
- * @param {string} currQuestionId - The ID to use for the question
- * @returns {Object} - A clean question object
+ * @returns {Object} - Result object with success flag and data/error
  */
-function createCleanQuestion(aiResponse, currQuestionId) {
-    // Extract question text with regex
-    const questionMatch = aiResponse.match(/["""]question["""]:\s*["""](.*?)["""]/);
-    const questionText = questionMatch
-        ? questionMatch[1]
-        : extractQuestionText(aiResponse);
+function tryExtractAndParseJSON(aiResponse) {
+    try {
+        // Extract JSON from various formats
+        let jsonString = extractJSONString(aiResponse);
+        if (!jsonString) {
+            return { success: false, error: "No JSON found" };
+        }
+        
+        // Clean and preprocess JSON
+        jsonString = preprocessJSON(jsonString);
+        
+        // Parse JSON
+        const parsedData = JSON.parse(jsonString);
+        
+        // Validate basic structure
+        if (!isValidQuestionStructure(parsedData)) {
+            return { success: false, error: "Invalid question structure" };
+        }
+        
+        return { success: true, data: parsedData };
+        
+    } catch (error) {
+        console.error("JSON extraction/parsing failed:", error.message);
+        return { success: false, error: error.message };
+    }
+}
 
-    // Extract question type
-    const questionTypeMatch = aiResponse.match(/["""]questionType["""]:\s*["""](.*?)["""]/);
-    const questionType = questionTypeMatch
-        ? questionTypeMatch[1]
-        : "multipleChoice";
+/**
+ * Extracts JSON string from AI response using multiple patterns
+ * 
+ * @param {string} aiResponse - The full AI response
+ * @returns {string|null} - Extracted JSON string or null
+ */
+function extractJSONString(aiResponse) {
+    // Remove "Processing AI response..." and "AI Response:" prefixes
+    let cleaned = aiResponse.replace(/^.*?AI Response:\s*/s, '');
+    
+    // Pattern 1: Standard markdown JSON code block
+    let match = cleaned.match(/```json\s*([\s\S]*?)\s*```/i);
+    if (match) return match[1];
+    
+    // Pattern 2: Generic code block
+    match = cleaned.match(/```\s*([\s\S]*?)\s*```/);
+    if (match) {
+        const content = match[1];
+        // Check if it looks like JSON
+        if (content.trim().startsWith('{') && content.trim().endsWith('}')) {
+            return content;
+        }
+    }
+    
+    // Pattern 3: Find JSON object without code block
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd = cleaned.lastIndexOf('}');
+    
+    if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
+        return cleaned.substring(jsonStart, jsonEnd + 1);
+    }
+    
+    return null;
+}
 
-    // Extract answers
-    const answers = extractAnswers(aiResponse);
+/**
+ * Preprocesses JSON string to fix common issues
+ * 
+ * @param {string} jsonString - Raw JSON string
+ * @returns {string} - Cleaned JSON string
+ */
+function preprocessJSON(jsonString) {
+    // Remove single-line comments
+    jsonString = jsonString.replace(/\/\/.*$/gm, '');
+    
+    // Remove multi-line comments
+    jsonString = jsonString.replace(/\/\*[\s\S]*?\*\//g, '');
+    
+    // Fix trailing commas
+    jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
+    
+    // Fix unquoted property names (simple cases)
+    jsonString = jsonString.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
+    
+    // Clean up whitespace
+    jsonString = jsonString.replace(/\s+/g, ' ').trim();
+    
+    return jsonString;
+}
 
-    // Use the provided ID
-    const questionId = currQuestionId;
+/**
+ * Validates if parsed data has basic question structure
+ * 
+ * @param {Object} data - Parsed JSON data
+ * @returns {boolean} - True if valid structure
+ */
+function isValidQuestionStructure(data) {
+    return (
+        data &&
+        typeof data === 'object' &&
+        data.question &&
+        Array.isArray(data.answers) &&
+        data.answers.length > 0
+    );
+}
 
-    // Extract explanation
-    const explanation = extractGeneralExplanation(aiResponse);
-
-    // Extract answer explanations
-    const answerExplanations = extractAnswerExplanations(aiResponse, answers);
-
-    return {
-        index: 1,
-        questionType: questionType,
-        question: questionText,
-        startTime: 30,
-        answers: answers,
+/**
+ * Formats question data with proper ObjectIds and structure
+ * 
+ * @param {Object} questionData - Raw question data
+ * @param {string} currQuestionId - Current question ID
+ * @returns {Object} - Formatted question object
+ */
+function formatQuestionData(questionData, currQuestionId) {
+    // Generate or use provided ObjectId
+    const questionId = currQuestionId ? 
+        (ObjectId.isValid(currQuestionId) ? new ObjectId(currQuestionId) : new ObjectId()) : 
+        new ObjectId();
+    
+    // Process answers with ObjectIds
+    const processedAnswers = questionData.answers.map(answer => ({
+        content: answer.content || '',
+        isCorrect: Boolean(answer.isCorrect),
+        _id: new ObjectId()
+    }));
+    
+    // Validate at least one correct answer for single-choice
+    const questionType = questionData.questionType || 'single-choice';
+    if (questionType === 'single-choice') {
+        const correctCount = processedAnswers.filter(a => a.isCorrect).length;
+        if (correctCount === 0) {
+            // Default first answer as correct if none specified
+            processedAnswers[0].isCorrect = true;
+        } else if (correctCount > 1) {
+            // Keep only first correct answer for single-choice
+            let foundFirst = false;
+            processedAnswers.forEach(answer => {
+                if (answer.isCorrect && foundFirst) {
+                    answer.isCorrect = false;
+                } else if (answer.isCorrect) {
+                    foundFirst = true;
+                }
+            });
+        }
+    }
+    
+    // Build formatted question object
+    const formattedQuestion = {
         _id: questionId,
-        explanation: explanation,
-        answerExplanations: answerExplanations,
-        history: []
+        questionType: questionType,
+        question: questionData.question,
+        startTime: questionData.startTime || Date.now(),
+        answers: processedAnswers,
+        history: [],
+        explanation: formatExplanation(questionData.explanation),
+        ...(questionData.index && { index: questionData.index })
+    };
+    
+    return formattedQuestion;
+}
+
+/**
+ * Formats explanation object
+ * 
+ * @param {Object|string} explanation - Raw explanation data
+ * @returns {Object} - Formatted explanation object
+ */
+function formatExplanation(explanation) {
+    if (!explanation) {
+        return { correct: '', incorrect: {} };
+    }
+    
+    if (typeof explanation === 'string') {
+        return { correct: explanation, incorrect: {} };
+    }
+    
+    if (typeof explanation === 'object') {
+        return {
+            correct: explanation.correct || '',
+            incorrect: explanation.incorrect || {}
+        };
+    }
+    
+    return { correct: '', incorrect: {} };
+}
+
+/**
+ * Creates question from text when JSON parsing fails
+ * 
+ * @param {string} aiResponse - The full AI response
+ * @param {string} currQuestionId - Current question ID
+ * @returns {Object} - Question object created from text
+ */
+function createQuestionFromText(aiResponse, currQuestionId) {
+    const questionId = currQuestionId ? 
+        (ObjectId.isValid(currQuestionId) ? new ObjectId(currQuestionId) : new ObjectId()) : 
+        new ObjectId();
+    
+    return {
+        _id: questionId,
+        questionType: extractQuestionType(aiResponse),
+        question: extractQuestionText(aiResponse),
+        startTime: Date.now(),
+        answers: extractAnswersFromText(aiResponse),
+        history: [],
+        explanation: { 
+            correct: extractGeneralExplanation(aiResponse),
+            incorrect: {}
+        },
+        processingNote: "Created from text extraction due to JSON parsing failure"
     };
 }
 
 /**
- * Extracts question text when regex pattern fails
+ * Extracts question type from text
+ * 
+ * @param {string} aiResponse - AI response text
+ * @returns {string} - Question type
+ */
+function extractQuestionType(aiResponse) {
+    const typePatterns = [
+        { pattern: /single[- ]?choice/i, type: 'single-choice' },
+        { pattern: /multiple[- ]?choice/i, type: 'multiple-choice' },
+        { pattern: /true[- ]?false/i, type: 'true-false' },
+        { pattern: /fill[- ]?blank/i, type: 'fill-blank' }
+    ];
+    
+    for (const { pattern, type } of typePatterns) {
+        if (pattern.test(aiResponse)) {
+            return type;
+        }
+    }
+    
+    return 'single-choice'; // default
+}
+
+/**
+ * Extracts question text from AI response
  * 
  * @param {string} aiResponse - The full AI response
  * @returns {string} - Extracted question text
  */
 function extractQuestionText(aiResponse) {
-    // Look for lines that appear to be questions
+    // Pattern 1: Look for quoted question after "question" key
+    let match = aiResponse.match(/["""]question["""]:\s*["""]([^"""]*)["""]/i);
+    if (match) return match[1].trim();
+    
+    // Pattern 2: Look for lines ending with question mark
     const lines = aiResponse.split('\n');
     for (const line of lines) {
-        if (line.includes('?') && line.length > 20 && !line.includes('{') && !line.includes('}')) {
-            return line.trim();
+        const trimmed = line.trim();
+        if (trimmed.endsWith('?') && trimmed.length > 10 && 
+            !trimmed.includes('{') && !trimmed.includes('}')) {
+            return trimmed;
         }
     }
-
-    // Fallback - look for content after "question":
-    const questionSectionMatch = aiResponse.match(/question[\s\S]*?:[\s\S]*?([^{}\[\]"',]*\?)/);
-    return questionSectionMatch
-        ? questionSectionMatch[1].trim()
-        : "Failed to extract question text";
+    
+    // Pattern 3: Look after "question:" (case insensitive)
+    match = aiResponse.match(/question:\s*([^{}\n]*\?)/i);
+    if (match) return match[1].trim();
+    
+    return "Unable to extract question text - manual review required";
 }
 
 /**
- * Extracts answers from the AI response
+ * Extracts answers from text when JSON parsing fails
  * 
- * @param {string} aiResponse - The full AI response
+ * @param {string} aiResponse - AI response text
  * @returns {Array} - Array of answer objects
  */
-function extractAnswers(aiResponse) {
+function extractAnswersFromText(aiResponse) {
     const answers = [];
-
-    // Try to find the answers section in the response
-    const answerSectionMatch = aiResponse.match(/"answers":\s*\[([\s\S]*?)\]/);
-
-    if (answerSectionMatch && answerSectionMatch[1]) {
-        // Split by closing brackets to find individual answer objects
-        const answerObjects = answerSectionMatch[1].split('},');
-
-        answerObjects.forEach((answerObj, index) => {
-            // Extract content
-            const contentMatch = answerObj.match(/"content":\s*"(.*?)"/);
-            const content = contentMatch ? contentMatch[1] : `Answer ${index + 1}`;
-
-            // Extract correctness
-            const correctMatch = answerObj.match(/"isCorrect":\s*(true|false)/);
-            const isCorrect = correctMatch ? correctMatch[1] === "true" : false;
-
-            // Extract or generate ID
-            const idMatch = answerObj.match(/"_id":\s*"(.*?)"/);
-            const _id = idMatch ? idMatch[1] : generateId();
-
-            answers.push({
-                content,
-                isCorrect,
-                _id
-            });
+    
+    // Try to extract from JSON-like structure first
+    const answersMatch = aiResponse.match(/"answers":\s*\[([\s\S]*?)\]/);
+    if (answersMatch) {
+        const answersText = answersMatch[1];
+        const answerBlocks = answersText.split('},{');
+        
+        answerBlocks.forEach((block, index) => {
+            const contentMatch = block.match(/"content":\s*"([^"]*)"/);
+            const correctMatch = block.match(/"isCorrect":\s*(true|false)/);
+            
+            if (contentMatch) {
+                answers.push({
+                    _id: new ObjectId(),
+                    content: contentMatch[1],
+                    isCorrect: correctMatch ? correctMatch[1] === 'true' : index === 0
+                });
+            }
         });
     }
-
-    // If no answers found or parsing failed, try to extract from explanations
+    
+    // If no answers found, create default ones
     if (answers.length === 0) {
-        // Look for explanations of correct answers
-        const correctExplanationsMatch = aiResponse.match(/\*\*Explanations for Correct Answers:\*\*([\s\S]*?)(?:\*\*|$)/);
-        if (correctExplanationsMatch) {
-            const correctExplanations = correctExplanationsMatch[1].split('\n').filter(line => line.trim());
-            correctExplanations.forEach(line => {
-                const answerMatch = line.match(/\*\*(.*?):\*\*/);
-                if (answerMatch) {
-                    answers.push({
-                        content: answerMatch[1].trim(),
-                        isCorrect: true,
-                        _id: generateId()
-                    });
-                }
+        // Look for bullet points or numbered lists
+        const lines = aiResponse.split('\n');
+        const answerLines = lines.filter(line => {
+            const trimmed = line.trim();
+            return (trimmed.match(/^[A-D]\)/) || 
+                   trimmed.match(/^[1-4]\./) || 
+                   trimmed.match(/^[\-\*]/)) && 
+                   trimmed.length > 3;
+        });
+        
+        if (answerLines.length > 0) {
+            answerLines.forEach((line, index) => {
+                const content = line.replace(/^[A-D\)\-\*1-4\.\s]+/, '').trim();
+                answers.push({
+                    _id: new ObjectId(),
+                    content: content,
+                    isCorrect: index === 0 // Default first as correct
+                });
             });
-        }
-
-        // Look for explanations of incorrect answers
-        const incorrectExplanationsMatch = aiResponse.match(/\*\*Explanations for Incorrect Answers:\*\*([\s\S]*?)(?:\*\*|$)/);
-        if (incorrectExplanationsMatch) {
-            const incorrectExplanations = incorrectExplanationsMatch[1].split('\n').filter(line => line.trim());
-            incorrectExplanations.forEach(line => {
-                const answerMatch = line.match(/\*\*(.*?):\*\*/);
-                if (answerMatch) {
-                    answers.push({
-                        content: answerMatch[1].trim(),
-                        isCorrect: false,
-                        _id: generateId()
-                    });
-                }
+        } else {
+            // Create fallback answers
+            const defaultAnswers = [
+                "Option A (Please review)",
+                "Option B (Please review)",
+                "Option C (Please review)",
+                "Option D (Please review)"
+            ];
+            
+            defaultAnswers.forEach((content, index) => {
+                answers.push({
+                    _id: new ObjectId(),
+                    content: content,
+                    isCorrect: index === 0
+                });
             });
         }
     }
-
-    // If still no answers found, create some placeholder answers
-    if (answers.length === 0) {
-        const defaultOptions = ["fetch API", "XMLHttpRequest object", "Axios library", "console.table()", "localStorage API"];
-        defaultOptions.forEach((option, index) => {
-            answers.push({
-                content: option,
-                isCorrect: index < 3, // First three are correct in the example
-                _id: generateId()
-            });
-        });
-    }
-
+    
     return answers;
 }
 
 /**
- * Extracts the general explanation from the AI response
+ * Extracts general explanation from AI response
  * 
  * @param {string} aiResponse - The full AI response
- * @returns {string} - The extracted explanation
+ * @returns {string} - Extracted explanation
  */
 function extractGeneralExplanation(aiResponse) {
-    const explanationRegex = /\*\*Explanation of Changes and Reasoning:\*\*([\s\S]*?)(?:\*\*Explanations for|$)/;
-    const explanationMatch = aiResponse.match(explanationRegex);
-    return explanationMatch ? explanationMatch[1].trim() : "";
-}
-
-/**
- * Extracts answer explanations from the AI response
- * 
- * @param {string} aiResponse - The full AI response
- * @param {Array} answers - The array of answer objects
- * @returns {Object} - Object mapping answer IDs to explanations
- */
-function extractAnswerExplanations(aiResponse, answers) {
-    const explanations = {};
-
-    // Extract explanations for correct answers
-    const correctExplanationsRegex = /\*\*Explanations for Correct Answers:\*\*([\s\S]*?)(?:\*\*Explanations for Incorrect Answers:\*\*|$)/;
-    const correctExplanationsMatch = aiResponse.match(correctExplanationsRegex);
-
-    if (correctExplanationsMatch && correctExplanationsMatch[1]) {
-        const correctAnswers = answers.filter(a => a.isCorrect);
-        const explanationLines = correctExplanationsMatch[1].split('\n').filter(line => line.trim());
-
-        matchExplanationsToAnswers(explanationLines, correctAnswers, explanations);
-    }
-
-    // Extract explanations for incorrect answers
-    const incorrectExplanationsRegex = /\*\*Explanations for Incorrect Answers:\*\*([\s\S]*?)(?=$)/;
-    const incorrectExplanationsMatch = aiResponse.match(incorrectExplanationsRegex);
-
-    if (incorrectExplanationsMatch && incorrectExplanationsMatch[1]) {
-        const incorrectAnswers = answers.filter(a => !a.isCorrect);
-        const explanationLines = incorrectExplanationsMatch[1].split('\n').filter(line => line.trim());
-
-        matchExplanationsToAnswers(explanationLines, incorrectAnswers, explanations);
-    }
-
-    return explanations;
-}
-
-/**
- * Matches explanation lines to answer objects
- * 
- * @param {Array} explanationLines - Lines containing explanations
- * @param {Array} answerObjects - Answer objects to match against
- * @param {Object} explanationsResult - Object to populate with results
- */
-function matchExplanationsToAnswers(explanationLines, answerObjects, explanationsResult) {
-    explanationLines.forEach(line => {
-        for (const answer of answerObjects) {
-            // Try different patterns to match answers with explanations
-            if (line.includes(answer.content)) {
-                const parts = line.split(':');
-                if (parts.length > 1) {
-                    explanationsResult[answer._id] = parts.slice(1).join(':').trim();
-                    break;
-                }
-            }
+    const patterns = [
+        /explanation[^:]*:\s*([^{}\n]*)/i,
+        /because\s+([^{}\n.]*)/i,
+        /reason[^:]*:\s*([^{}\n]*)/i
+    ];
+    
+    for (const pattern of patterns) {
+        const match = aiResponse.match(pattern);
+        if (match && match[1].trim().length > 10) {
+            return match[1].trim();
         }
-    });
-
-    // Second pass with more lenient matching if we didn't get all explanations
-    if (Object.keys(explanationsResult).length < answerObjects.length) {
-        explanationLines.forEach(line => {
-            // Skip lines we've already processed
-            const alreadyMatched = Object.values(explanationsResult).some(
-                explanation => line.includes(explanation)
-            );
-
-            if (!alreadyMatched) {
-                for (const answer of answerObjects) {
-                    if (!explanationsResult[answer._id]) {
-                        // Try to match based on keyword overlap
-                        const answerWords = answer.content.toLowerCase().split(/\s+/);
-                        const lineWords = line.toLowerCase().split(/\s+/);
-
-                        const matchCount = answerWords.filter(word =>
-                            word.length > 3 && lineWords.includes(word)
-                        ).length;
-
-                        if (matchCount >= Math.ceil(answerWords.length * 0.3)) {
-                            const parts = line.split(':');
-                            if (parts.length > 1) {
-                                explanationsResult[answer._id] = parts.slice(1).join(':').trim();
-                                break;
-                            }
-                        }
-                    }
-                }
-            }
-        });
     }
+    
+    return "No explanation available";
 }
 
 /**
- * Generates a simple ID for new elements
+ * Creates error response object
  * 
- * @returns {string} - A new unique ID
+ * @param {Error} error - The error that occurred
+ * @param {string} aiResponse - Original AI response
+ * @returns {Object} - Error response object
  */
-function generateId() {
-    return Date.now().toString(16) + Math.random().toString(16).substring(2, 8);
+function createErrorResponse(error, aiResponse) {
+    return {
+        _id: new ObjectId(),
+        error: true,
+        message: `Failed to process AI response: ${error.message}`,
+        questionType: 'single-choice',
+        question: 'Error processing question - manual review required',
+        startTime: Date.now(),
+        answers: [
+            { _id: new ObjectId(), content: 'Error - Please review', isCorrect: true },
+            { _id: new ObjectId(), content: 'Manual intervention needed', isCorrect: false }
+        ],
+        history: [],
+        explanation: { 
+            correct: 'Processing error occurred', 
+            incorrect: {} 
+        },
+        originalResponse: aiResponse.substring(0, 1000), // Truncate for storage
+        processingError: {
+            message: error.message,
+            timestamp: new Date().toISOString()
+        }
+    };
 }
 
-// Export functions
+/**
+ * Utility function to generate MongoDB ObjectId
+ * 
+ * @returns {ObjectId} - New MongoDB ObjectId
+ */
+function generateObjectId() {
+    return new ObjectId();
+}
+
+/**
+ * Validates if a string is a valid ObjectId
+ * 
+ * @param {string} id - ID to validate
+ * @returns {boolean} - True if valid ObjectId
+ */
+function isValidObjectId(id) {
+    return ObjectId.isValid(id);
+}
+
+// Export the main function and utilities
 export default processAIResponse;
+export { 
+    generateObjectId, 
+    isValidObjectId, 
+    extractJSONString, 
+    preprocessJSON 
+};
