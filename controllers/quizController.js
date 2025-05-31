@@ -4,15 +4,15 @@ import ErrorResponse from "../utils/ErrorResponse.js";
 import mongoose from "mongoose";
 import Progress from "../models/Progress.js";
 import Course from "../models/Course.js";
-import {ModuleItem} from "../models/Module.js";
+import { ModuleItem } from "../models/Module.js";
 
 // @desc    Get all quizzes
 // @route   GET /api/v1/quizzes
 // @access  Public
 const getQuizzes = asyncHandler(async (req, res, next) => {
-    const {moduleId, ...filters} = req.query;
-    if (moduleId) { 
-        const quizzes = await Quiz.find({moduleId}, filters);
+    const { moduleId, ...filters } = req.query;
+    if (moduleId) {
+        const quizzes = await Quiz.find({ moduleId }, filters);
         return res.status(200).json({ success: true, count: quizzes.length, data: quizzes });
 
     }
@@ -36,9 +36,9 @@ const getQuizById = asyncHandler(async (req, res, next) => {
         userId: req.user._id,
         moduleId: quiz.moduleItem.module
     })
-    if(progress) {
+    if (progress) {
         const moduleItemProgress = progress.moduleItemProgresses.find(p => p.moduleItemId.toString() === quiz.moduleItem._id.toString());
-        if(moduleItemProgress && (moduleItemProgress.status === 'completed' || moduleItemProgress.status === 'in-progress')) {
+        if (moduleItemProgress && (moduleItemProgress.status === 'completed' || moduleItemProgress.status === 'in-progress')) {
             console.log('Quiz in progress or completed');
             return res.status(200).json({ success: true, data: quiz, quizProgress: moduleItemProgress });
         }
@@ -50,8 +50,8 @@ const getQuizById = asyncHandler(async (req, res, next) => {
 // @route   POST /api/v1/quizzes
 // @access  Private
 const createQuiz = asyncHandler(async (req, res, next) => {
-    const {title, description, duration, passingScore, questions, moduleId} = req.body;
-    
+    const { title, description, duration, passingScore, questions, moduleId } = req.body;
+
     const quiz = await Quiz.create({
         title, description, duration, passingScore, questions, moduleId
     });
@@ -97,17 +97,17 @@ const calculateQuizScore = (questions, answers, timeSpent) => {
     let wrongAnswers = 0;
     let totalPoints = 0;
     let earnedPoints = 0;
-    console.log(answers );
+    console.log(answers);
     const processedAnswers = questions.map((question, index) => {
         const userAnswer = answers[index];
         let correctAnswer = question.answers.find(a => a.isCorrect === true);
-        if (question.type === 'multiple-choice') 
+        if (question.type === 'multiple-choice')
             correctAnswer = question.answers.filter(a => a.isCorrect === true);
-        console.log(question.type ,correctAnswer);
+        console.log(question.type, correctAnswer);
         totalPoints += question.points;
         let isCorrect = false;
 
-        if (question.type === 'only-choice') {
+        if (question.type === 'single-choice') {
             isCorrect = userAnswer === correctAnswer._id.toString();
         } else if (question.type === 'multiple-choice') {
             isCorrect = userAnswer.length === correctAnswer.length;
@@ -184,7 +184,7 @@ const answerQuiz = asyncHandler(async (req, res, next) => {
                 moduleItemProgresses: []
             });
         }
-        if(moduleProgress.status === 'completed') {
+        if (moduleProgress.status === 'completed') {
             return next(new ErrorResponse('Module is already completed', 400));
         }
 
@@ -207,10 +207,10 @@ const answerQuiz = asyncHandler(async (req, res, next) => {
             moduleItemProgressIndex = moduleProgress.moduleItemProgresses.length - 1;
         }
 
-        if(moduleItemProgress.status === 'completed' || moduleItemProgress.status === 'in-progress') {
+        if (moduleItemProgress.status === 'completed' || moduleItemProgress.status === 'in-progress') {
             const currentScore = scorePercentage;
             const highestScore = moduleItemProgress.result.quiz.score || 0
-            if(currentScore > highestScore) {
+            if (currentScore > highestScore) {
                 moduleItemProgress.result.quiz = {
                     score: currentScore,
                     totalQuestions,
@@ -251,7 +251,7 @@ const answerQuiz = asyncHandler(async (req, res, next) => {
                     }
                 });
             }
-        
+
         }
 
         moduleItemProgress.attempts += 1;

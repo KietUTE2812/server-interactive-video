@@ -1,5 +1,5 @@
-import {Video} from '../models/Module.js'
-import {Module, ModuleItem} from '../models/Module.js';
+import { Video } from '../models/Module.js'
+import { Module, ModuleItem } from '../models/Module.js';
 import ErrorResponse from '../utils/ErrorResponse.js';
 import miniO from "../utils/uploadToMiniO.js";
 
@@ -17,10 +17,10 @@ const createVideo = async (req, res, next) => {
         return res.status(400).send('No file uploaded.');
     }
     const module = await Module.findById(moduleId);
-    if(!module) {
+    if (!module) {
         return new ErrorResponse(`Module not found with id of ${moduleId}`, 404);
     }
-    if(!references.fileName || !references.size || !references.title || !references.file) {
+    if (!references.fileName || !references.size || !references.title || !references.file) {
         return new ErrorResponse(`Please provide a valid reference`, 400);
     }
     const videoStream = file
