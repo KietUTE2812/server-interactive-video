@@ -1,3 +1,4 @@
+import asyncHandler from '../middlewares/asyncHandler.js';
 import { Video } from '../models/Module.js'
 import { Module, ModuleItem } from '../models/Module.js';
 import ErrorResponse from '../utils/ErrorResponse.js';
@@ -40,13 +41,13 @@ const createVideo = async (req, res, next) => {
 
 // @desc    Get video by ID
 // @route   GET /api/v1/videos/:id
-const getVideoById = async (req, res, next) => {
+const getVideoById = asyncHandler(async (req, res, next) => {
     const video = await Video.findById(req.params.id);
     if (!video) {
         return next(new ErrorResponse(`Video not found with id of ${req.params.id}`, 404));
     }
     res.status(200).json({ success: true, data: video });
-}
+})
 
 
 export default { createVideo, getVideoById };
