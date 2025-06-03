@@ -9,6 +9,7 @@ import mongoose from 'mongoose';
 import ModuleProgress from '../models/Progress.js';
 import { GenerateInstructions } from '../utils/promptCodeCompletion_Grok.js';
 import { CompletionCopilot } from 'monacopilot';
+import GeminiAI from '../utils/GeminiAI.js';
 
 // @desc      Compile code
 // @route     POST /api/v1/program/compile
@@ -20,66 +21,92 @@ export const compile = asyncHandler(async (req, res, next) => {
     if (!code || !language) {
         return next(new ErrorResponse("Missing code or language", 400));
     }
+    console.log("Received request:", req.body);
 
-    const codeDe = convertCode(code, input, language, codeExecute);
-    console.log("Converted Code:", codeDe);
 
-    // console.log("Combined Code:", codeDe, code);
-    //console.log("Received request:", req.body);
-
-    // Bản đồ ngôn ngữ và phiên bản
-    const languageMap = {
-        "c": { language: "c", version: "10.2.0" },
-        "cpp": { language: "cpp", version: "10.2.0" },
-        "python": { language: "python", version: "3.10.0" },
-        "java": { language: "java", version: "15.0.2" },
-        "javascript": { language: "javascript", version: "18.15.0" }
-    };
-
-    // Kiểm tra ngôn ngữ có hỗ trợ không
-    if (!languageMap[language.toLowerCase()]) {
-        return next(new ErrorResponse("Unsupported language", 400));
-    }
-
-    // Lấy thông tin ngôn ngữ và phiên bản từ languageMap
-    const { language: lang, version } = languageMap[language.toLowerCase()];
-
-    // Dữ liệu cần gửi đi
-    const data = {
-        language: lang,
-        version: version,
-        files: [
-            {
-                name: `main.${language === 'python' ? 'py' : language}`,
-                content: codeDe
-            }
-        ],
-        stdin: ""
-    };
-    console.log("Data to send:", data);
-
-    // Gọi API và trả về kết quả
-    const response = await axios.post('https://emkc.org/api/v2/piston/execute', data, {
-        headers: { 'Content-Type': 'application/json' }
-    });
-
-    console.log("API Response:", response.data);
+    const response = await runCode(code, language, input, codeExecute);
+    console.log("Response:", response);
     res.status(200).json({
         success: true,
         data: {
-            output: response.data.run.output,
-            stderr: response.data.run.stderr,
-            stdout: response.data.run.stdout,
-            exitCode: response.data.run.code
+            output: response.output || "",
+            stderr: response.stderr || "",
+            stdout: response.stdout || "",
+            exitCode: response.code || 0,
+            language: language,
+            executionTime: response.real_time || 0,
+            signal: response.signal || null
         }
     });
-    // res.json({
-    //     output: response.data.run.output,
-    //     stderr: response.data.run.stderr,
-    //     stdout: response.data.run.stdout,
-    //     exitCode: response.data.run.code
-    // });
 });
+
+// Helper function để convert parameters thành stdin format
+function convertParametersToStdin(input, language) {
+    try {
+        if (!input || !input.includes('=')) return "";
+
+        const params = {};
+        input.split(';').forEach(param => {
+            const trimmedParam = param.trim();
+            if (!trimmedParam) return;
+
+            const equalIndex = trimmedParam.indexOf('=');
+            if (equalIndex === -1) return;
+
+            const key = trimmedParam.substring(0, equalIndex).trim();
+            const value = trimmedParam.substring(equalIndex + 1).trim();
+
+            if (!key || !value) return;
+
+            if (value.startsWith('[') && value.endsWith(']')) {
+                const arrayContent = value.slice(1, -1).trim();
+                params[key] = {
+                    type: 'array',
+                    value: arrayContent ? arrayContent.split(',').map(v => v.trim()) : []
+                };
+            } else {
+                params[key] = {
+                    type: 'primitive',
+                    value: value
+                };
+            }
+        });
+
+        // Convert cho Java Scanner format
+        if (language.toLowerCase() === 'java') {
+            return convertToJavaStdin(params);
+        }
+
+        return "";
+    } catch (error) {
+        console.warn("Error converting parameters to stdin:", error.message);
+        return "";
+    }
+}
+
+function convertToJavaStdin(params) {
+    let stdinParts = [];
+
+    // Tìm array parameter (thường là arr, nums, array, etc.)
+    const arrayParam = Object.entries(params).find(([key, param]) => param.type === 'array');
+
+    if (arrayParam) {
+        const [arrayKey, arrayValue] = arrayParam;
+        // Thêm size của array
+        stdinParts.push(arrayValue.value.length.toString());
+        // Thêm các phần tử của array
+        stdinParts.push(...arrayValue.value);
+    }
+
+    // Thêm các primitive parameters
+    Object.entries(params).forEach(([key, param]) => {
+        if (param.type === 'primitive') {
+            stdinParts.push(param.value);
+        }
+    });
+
+    return stdinParts.join('\n');
+}
 
 // @desc    Get all programming problems
 // @route   GET /api/problems
@@ -186,6 +213,109 @@ export const submitSolution = asyncHandler(async (req, res, next) => {
     });
 });
 
+async function runCode(code, language, input, codeExecute) {
+    let processedInput = input || "";
+    let stdinInput = "";
+    if (input && input.includes('=') && input.includes(';')) {
+        processedInput = input;
+        if (codeExecute && codeExecute.includes('Scanner')) {
+            stdinInput = convertParametersToStdin(input, language);
+        } else {
+            stdinInput = "";
+        }
+    } else if (input && !input.includes('=')) {
+        stdinInput = input;
+        processedInput = "";
+    } else {
+        stdinInput = "";
+        processedInput = "";
+    }
+    let codeDe;
+    try {
+        // Gọi convertCode với error handling
+        codeDe = convertCode(code, processedInput, language, codeExecute);
+        console.log("Converted Code:", codeDe);
+    } catch (error) {
+        console.error("Error in convertCode:", error.message);
+        // Nếu convertCode fail, fallback về code gốc hoặc codeExecute
+        if (codeExecute) {
+            codeDe = codeExecute.replace(/solutionCode/g, code);
+        } else {
+            codeDe = code;
+        }
+        console.log("Using fallback code:", codeDe);
+    }
+    const languageMap = {
+        "c": { language: "c", version: "10.2.0" },
+        "cpp": { language: "cpp", version: "10.2.0" },
+        "python": { language: "python", version: "3.10.0" },
+        "java": { language: "java", version: "15.0.2" },
+        "javascript": { language: "javascript", version: "18.15.0" }
+    };
+
+    if (!languageMap[language.toLowerCase()]) {
+        return next(new ErrorResponse("Unsupported language", 400));
+    }
+
+    const { language: lang, version } = languageMap[language.toLowerCase()];
+
+    const getFileExtension = (lang) => {
+        switch (lang.toLowerCase()) {
+            case 'python': return 'py';
+            case 'java': return 'java';
+            case 'cpp': return 'cpp';
+            case 'c': return 'c';
+            case 'javascript': return 'js';
+            default: return lang;
+        }
+    };
+    const data = {
+        language: lang,
+        version: version,
+        files: [
+            {
+                name: `main.${getFileExtension(language)}`,
+                content: codeDe
+            }
+        ],
+        stdin: stdinInput
+    };
+    console.log("Data to send:", data);
+    try {
+        // Gọi API và trả về kết quả
+        const response = await axios.post('https://emkc.org/api/v2/piston/execute', data, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 10000 // 10 seconds timeout
+        });
+
+        console.log("API Response:", response.data);
+
+        // Kiểm tra response có hợp lệ không
+        if (!response.data || !response.data.run) {
+            return next(new ErrorResponse("Invalid response from execution service", 500));
+        }
+
+        // Kiểm tra nếu bị timeout hoặc killed
+        if (response.data.run.signal === 'SIGKILL') {
+            return next(new ErrorResponse("Code execution was terminated (likely due to timeout or infinite loop)", 408));
+        }
+
+        return response.data.run;
+    } catch (error) {
+        console.error("Error calling execution API:", error.message);
+
+        // Xử lý các loại lỗi khác nhau
+        if (error.code === 'ECONNABORTED') {
+            return next(new ErrorResponse("Code execution timeout", 408));
+        } else if (error.response) {
+            return next(new ErrorResponse(`Execution service error: ${error.response.data?.message || error.message}`, error.response.status));
+        } else {
+            return next(new ErrorResponse("Failed to execute code", 500));
+        }
+    }
+
+}
+
 export const submissionCode = asyncHandler(async (req, res, next) => {
     const { code, language, testcases, codeExecute, progressData } = req.body;
     if (!code || !language || !testcases.length) {
@@ -198,28 +328,14 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
         codeExecute,
         progressData: JSON.stringify(progressData), // Log toàn bộ progressData
     });
-    const languageMap = {
-        "c": { language: "c", version: "10.2.0" },
-        "cpp": { language: "cpp", version: "10.2.0" },
-        "python": { language: "python", version: "3.10.0" },
-        "java": { language: "java", version: "15.0.2" },
-        "javascript": { language: "javascript", version: "18.15.0" }
-    };
 
-    // Kiểm tra ngôn ngữ có hỗ trợ không
-    if (!languageMap[language.toLowerCase()]) {
-        return next(new ErrorResponse("Unsupported language", 400));
-    }
     if (!progressData) {
         return next(new ErrorResponse("Progress data not found", 400));
     }
 
-    // Lấy thông tin ngôn ngữ và phiên bản từ languageMap
-    const { language: lang, version } = languageMap[language.toLowerCase()];
-
     const results = [];
     const testcaseResults = [];
-    let fileSize = null;
+    let fileSize = getFileSize(code);
     const testcaseStatuses = [];
 
     // Hàm xác định status tổng thể cho submission
@@ -256,33 +372,14 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
     // console.log("code:", code);
 
     for (const testcase of testcases) {
-        // console.log("input:", testcase.input);
-        // Thêm input của testcase vào stdin
-        const codeDe = convertCode(code, testcase.input, language, codeExecute);
-        fileSize = getFileSize(codeDe);
-        const data = {
-            language: lang,
-            version: version,
-            files: [
-                {
-                    name: `main.${language === 'python' ? 'py' : language}`,
-                    content: codeDe
-                }
-            ],
-            stdin: ""
-        };
-        try {
-            // Gọi API thực thi code
-            const response = await axios.post('https://emkc.org/api/v2/piston/execute', data, {
-                headers: { 'Content-Type': 'application/json' }
-            });
-            //console.log("API Response:", response.data);
 
+        try {
+            const response = await runCode(code, language, testcase.input, codeExecute);
             // Kiểm tra kết quả thực thi
-            const executionResult = response.data.run.output.trim();
+            const executionResult = response.output.trim();
             const isPassed = executionResult === testcase.expectedOutput;
 
-            if (response.data.run.stderr && !response.data.run.output) {
+            if (response.stderr && !response.output) {
                 apiErrors.compilationError = true;
             }
 
@@ -291,7 +388,7 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
                 expectedOutput: testcase.expectedOutput,
                 actualOutput: executionResult,
                 passed: isPassed,
-                executeTime: response.data.run.real_time || 0,
+                executeTime: response.real_time || 0,
                 executeTimeLimit: testcase.executeTimeLimit
             });
 
@@ -301,7 +398,7 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
                 expectedOutput: testcase.expectedOutput,
                 actualOutput: executionResult,
                 passed: isPassed,
-                executeTime: response.data.run.real_time || 0
+                executeTime: response.real_time || 0
             });
 
         } catch (error) {
@@ -336,7 +433,6 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
         memory: fileSize
     };
 
-    //console.log("submission: ", submission);
     try {
         const newSubmission = await Submission.create(submission);
 
@@ -364,6 +460,7 @@ export const submissionCode = asyncHandler(async (req, res, next) => {
             attempts: (progressData.attempts || 0) + 1,
             status: passRate === 100 ? 'completed' : 'in-progress',
             completedAt: passRate === 100 ? new Date() : null,
+            completionPercentage: passRate,
             result: {
                 ...progressData.result,
                 programming: {
@@ -588,7 +685,7 @@ export const codeCompletion = asyncHandler(async (req, res, next) => {
             return next(new ErrorResponse('Missing code or language', 400));
         }
 
-        const messages = GenerateInstructions(
+        const prompt = GenerateInstructions(
             language,
             fullCode,
             codeBeforeCursor,
@@ -596,46 +693,63 @@ export const codeCompletion = asyncHandler(async (req, res, next) => {
             currentLine,
             lineContext,
             cursorPosition);
-        console.log('Sending request to Grok AI:', messages);
+        console.log('Sending request to GeminiAI:', prompt);
 
-        const grokResponse = await fetch('https://api.x.ai/v1/chat/completions', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${process.env.GROK_API}`
-            },
-            body: JSON.stringify({
-                model: 'grok-3-beta',
-                messages,
-                max_tokens: 50,
-                temperature: 0.3
-            })
-        });
 
-        if (!grokResponse.ok) {
-            const errorData = await grokResponse.json();
-            console.error('Grok API error:', errorData);
-            if (grokResponse.status === 429) {
-                return next(new ErrorResponse('Rate limit exceeded', 429));
+        // Gọi hàm GeminiAI, hàm này nên trả về đối tượng JSON đã được parse từ API
+        const apiResponse = await GeminiAI(prompt);
+
+        // Log toàn bộ phản hồi từ API để debug
+        console.log('Raw response from GeminiAI:', JSON.stringify(apiResponse, null, 2));
+
+        let suggestions = apiResponse; // Giá trị mặc định, theo yêu cầu "If no reasonable suggestion can be made, return an empty string."
+
+        if (apiResponse && apiResponse.candidates && apiResponse.candidates.length > 0) {
+            const candidate = apiResponse.candidates[0];
+            if (candidate.content && candidate.content.parts && candidate.content.parts.length > 0) {
+                const part = candidate.content.parts[0];
+                if (part && typeof part.text === 'string') {
+                    suggestions = part.text;
+                } else {
+                    console.warn('GeminiAI response: The first part in parts has no text or is not a string.', part);
+                }
+            } else {
+                // Trường hợp này có thể xảy ra nếu model không trả về nội dung nào (ví dụ: bị chặn bởi bộ lọc an toàn mà không có thông báo chi tiết trong part)
+                console.warn('GeminiAI response: Candidate does not have valid content.parts.', candidate);
+                // Kiểm tra finishReason để biết thêm chi tiết nếu có
+                if (candidate.finishReason && candidate.finishReason !== 'STOP') {
+                    console.warn(`GeminiAI completion candidate finishReason: ${candidate.finishReason}`);
+                    // Nếu bị chặn vì an toàn, suggestions nên là chuỗi rỗng hoặc thông báo lỗi tùy theo logic của bạn
+                    if (candidate.finishReason === 'SAFETY') {
+                        // suggestions đã là "" (rỗng) theo mặc định, phù hợp với yêu cầu prompt.
+                    }
+                }
             }
-            return next(new ErrorResponse(`Grok AI API error: ${errorData.message || 'Unknown error'}`, 500));
+        } else {
+            console.warn('GeminiAI response: No candidates found or invalid response structure.', apiResponse);
         }
+        console.log('Suggestions:', suggestions);
 
-        const completionData = await grokResponse.json();
-        console.log('Grok AI response:', completionData);
-
-        const suggestions = completionData.choices.map(choice => ({
-            text: choice.message.content,
-            score: choice.score || 1.0
-        }));
-
+        // suggestions lúc này sẽ là chuỗi code được gợi ý, hoặc chuỗi rỗng nếu không có gợi ý phù hợp.
         res.status(200).json({
             success: true,
             data: suggestions
         });
+
     } catch (error) {
-        console.error('Code completion error:', error);
-        return next(new ErrorResponse('Failed to generate code completion', 500));
+        // Ghi log lỗi chi tiết hơn ở server
+        if (error.isAxiosError) { // Ví dụ nếu GeminiAI dùng Axios và có lỗi mạng/API
+            console.error('Axios error during GeminiAI call:', error.toJSON());
+        } else {
+            console.error('Code completion internal error:', error);
+        }
+
+        // Trả về lỗi cho client
+        // Đảm bảo rằng ErrorResponse được thiết kế để xử lý message và statusCode một cách phù hợp
+        if (error instanceof ErrorResponse) {
+            return next(error);
+        }
+        return next(new ErrorResponse('Failed to generate code hint', 500));
     }
 });
 

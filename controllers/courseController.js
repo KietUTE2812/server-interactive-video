@@ -23,14 +23,14 @@ import { getNotificationService } from "../services/notificationService.js";
  */
 const buildCourseFilter = async (queryParams, user) => {
   const { search, tags, level, orderBy, page, limit, ...otherFilters } = queryParams;
-  
+
   // Áp dụng bộ lọc cơ bản
   let filter = { status: 'published', ...otherFilters };
   // Áp dụng bộ lọc theo vai trò người dùng
   if (user?.role === 'instructor') {
     filter.instructor = user._id;
   }
-  
+
   if (user?.role === 'student') {
     filter.isApproved = true;
   }
@@ -38,18 +38,18 @@ const buildCourseFilter = async (queryParams, user) => {
   if (user?.role === 'admin') {
     delete filter.status;
   }
-  
+
   // Xử lý tags
   if (tags) {
     const tagArray = typeof tags === 'string' ? tags.split(',') : tags;
     filter.tags = { $all: tagArray };
   }
-  
+
   // Xử lý level
   if (level && level !== 'all') {
     filter.level = { $regex: level, $options: 'i' };
   }
-  
+
   // Xử lý tìm kiếm
   if (search) {
     filter = {
@@ -59,14 +59,14 @@ const buildCourseFilter = async (queryParams, user) => {
         { tags: { $regex: search, $options: 'i' } }
       ]
     };
-    
+
     // Tìm giảng viên phù hợp với từ khóa tìm kiếm
     const instructors = await User.find({
       $or: [
         { 'profile.fullName': { $regex: search, $options: 'i' } }
       ]
     }).select('_id');
-    
+
     if (instructors.length > 0) {
       filter.$or.push({ instructor: { $in: instructors.map(i => i._id) } });
     }
@@ -102,16 +102,16 @@ const createPaginatedResponse = (data, page, limit, total) => {
  */
 const validateCourseOwnership = async (courseId, userId, userRole) => {
   const course = await Course.findById(courseId);
-  
+
   if (!course) {
     throw new ErrorResponse(`Course not found with id of ${courseId}`, 404);
   }
-  
+
   // Cho phép admin hoặc người tạo khóa học
   if (userRole === 'admin' || course.instructor.toString() === userId) {
     return true;
   }
-  
+
   throw new ErrorResponse(`User ${userId} is not authorized to perform this action`, 403);
 };
 
@@ -129,15 +129,15 @@ export const getCourses = asyncHandler(async (req, res, next) => {
 
   // Xây dựng bộ lọc từ query parameters
   const filter = await buildCourseFilter(req.query, user);
-  
+
   // Đếm tổng số khóa học thỏa mãn điều kiện
   const total = await Course.countDocuments(filter);
-  
+
   // Xác định trường sắp xếp
-  const sortField = orderBy === 'newest' 
-    ? { createdAt: -1 } 
+  const sortField = orderBy === 'newest'
+    ? { createdAt: -1 }
     : { averageRating: -1 };
-  
+
   // Thực hiện truy vấn chính với populate tối thiểu
   const courses = await Course.find(filter)
     .select('title description level price tags averageRating instructor status approvedBy isApproved reviewCount photo courseId')
@@ -151,7 +151,7 @@ export const getCourses = asyncHandler(async (req, res, next) => {
   if (role === 'user') {
     courses = courses.filter(course => course.isApproved);
   }
-  
+
   // Trả về kết quả
   res.status(200).json(createPaginatedResponse(courses, page, limit, total));
 });
@@ -164,13 +164,13 @@ export const getCourses = asyncHandler(async (req, res, next) => {
 export const getCourseById = asyncHandler(async (req, res, next) => {
   const courseId = req.params.id;
   const userId = req.user?._id;
-  
+
   // Tìm thông tin người dùng
   const user = await User.findById(userId);
   if (!user) {
     return next(new ErrorResponse('User not found', 404));
   }
-  
+
   // Tìm khóa học và populate các thông tin cần thiết
   const course = await Course.findById(courseId)
     .populate({
@@ -184,17 +184,17 @@ export const getCourseById = asyncHandler(async (req, res, next) => {
     .populate('approvedBy', 'email profile')
     .populate('instructor', 'email profile')
     .populate('reviewCount');
-  
+
   if (!course) {
     return next(new ErrorResponse(`Course not found with id of ${courseId}`, 404));
   }
-  
+
   // Đếm số người đăng ký
   const enrollments = await User.countDocuments({ enrolled_courses: courseId });
-  
+
   // Kiểm tra người dùng đã đăng ký khóa học chưa
   const isEnrolled = user.enrolled_courses.includes(course._id);
-  
+
   // Trả về response tương ứng
   res.status(200).json({
     success: true,
@@ -211,11 +211,11 @@ export const getCourseById = asyncHandler(async (req, res, next) => {
  */
 export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
   const courseIdParam = req.params.id;
-  
+
   // Tìm khóa học theo courseId (không phải _id)
-  const course = await Course.findOne({ 
-      courseId: { $regex: new RegExp(`^${courseIdParam}$`, 'i') } 
-    })
+  const course = await Course.findOne({
+    courseId: { $regex: new RegExp(`^${courseIdParam}$`, 'i') }
+  })
     .populate('instructor', 'email profile')
     .populate({
       path: 'modules',
@@ -231,11 +231,11 @@ export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
   if (!course) {
     return next(new ErrorResponse(`Course not found with courseId of ${courseIdParam}`, 404));
   }
-  
+
   // Kiểm tra người dùng đã đăng ký chưa (nếu có userId trong query)
   let isEnrolled = false;
   const userId = req.query?.userId;
-  
+
   if (userId) {
     const user = await User.findById(userId);
     if (user && course && user.enrolled_courses.includes(course._id)) {
@@ -243,10 +243,10 @@ export const getCourseByCourseId = asyncHandler(async (req, res, next) => {
     }
   }
 
-  res.status(200).json({ 
-    success: true, 
-    data: course, 
-    isEnrolled 
+  res.status(200).json({
+    success: true,
+    data: course,
+    isEnrolled
   });
 });
 
@@ -286,17 +286,17 @@ export const getCourseByInstructor = asyncHandler(async (req, res, next) => {
  */
 export const createCourse = asyncHandler(async (req, res, next) => {
   // Validate đầu vào
-    const { title, description } = req.body;
-    const notificationService = getNotificationService();
-  
+  const { title, description } = req.body;
+  const notificationService = getNotificationService();
+
   if (!title || title.trim() === '') {
     return next(new ErrorResponse('Title is required', 400));
   }
-  
+
   if (!description || description.trim() === '') {
     return next(new ErrorResponse('Description is required', 400));
   }
-  
+
   // Thêm ID người tạo khóa học
   const instructorId = req.user.id;
   const courseData = {
@@ -305,17 +305,17 @@ export const createCourse = asyncHandler(async (req, res, next) => {
   };
   // Upload video nếu có
   if (req.files) {
-      if (req.files.sumaryVideo[0]) {
-        const videoFile = req.files.sumaryVideo[0];
-        try {
-          const videoName = Date.now() + '_' + videoFile.originalname;
-          const videoUrl = await minio.uploadStream(videoName, videoFile.buffer, videoFile.size);
-          courseData.sumaryVideo = `${process.env.MINIO_URL}/${videoUrl.objectName}`;
-        } catch (error) {
-          return next(new ErrorResponse(`File upload failed: ${error.message}`, 500));
-        }
+    if (req.files.sumaryVideo[0]) {
+      const videoFile = req.files.sumaryVideo[0];
+      try {
+        const videoName = Date.now() + '_' + videoFile.originalname;
+        const videoUrl = await minio.uploadStream(videoName, videoFile.buffer, videoFile.size);
+        courseData.sumaryVideo = `${process.env.MINIO_URL}/${videoUrl.objectName}`;
+      } catch (error) {
+        return next(new ErrorResponse(`File upload failed: ${error.message}`, 500));
+      }
     }
-    
+
     else {
       return res.status(400).json({
         success: false,
@@ -333,7 +333,7 @@ export const createCourse = asyncHandler(async (req, res, next) => {
       }
     }
   }
-  
+
   // Tạo khóa học mới
   const course = await Course.create(courseData);
 
@@ -346,7 +346,7 @@ export const createCourse = asyncHandler(async (req, res, next) => {
       isSystem: true
     });
   }
-  
+
 
   res.status(201).json({
     success: true,
@@ -366,15 +366,15 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
   // Bắt đầu session transaction
   const session = await mongoose.startSession();
   session.startTransaction();
-  
+
   try {
     // Kiểm tra quyền cập nhật khóa học
     await validateCourseOwnership(courseId, userId, req.user.role);
-    
+
     // Chuẩn bị dữ liệu cập nhật
     const courseData = { ...req.body };
     delete courseData.modules; // Xử lý riêng modules
-    
+
     // Upload video nếu có
     if (req.files) {
       if (req?.files?.sumaryVideo) {
@@ -398,7 +398,7 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
         }
       }
     }
-    
+
     // Cập nhật khóa học
     const updatedCourse = await Course.findByIdAndUpdate(
       courseId,
@@ -409,7 +409,7 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
         session
       }
     );
-    
+
     // Cập nhật các modules nếu có
     if (req.body.modules) {
       const modules = JSON.parse(req.body.modules);
@@ -418,11 +418,11 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
         if (moduleData._id) {
           // Cập nhật module hiện có
           const module = await Module.findById(moduleData._id);
-          
+
           if (!module) {
             throw new ErrorResponse(`Module with id ${moduleData._id} not found`, 404);
           }
-          
+
           // Chỉ cập nhật các trường cần thiết
           await Module.findByIdAndUpdate(
             moduleData._id,
@@ -446,7 +446,7 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
             description: moduleData.description,
             moduleItems: []
           }], { session });
-          
+
           // Thêm module mới vào khóa học
           await Course.findByIdAndUpdate(
             updatedCourse._id,
@@ -456,10 +456,10 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
         }
       }));
     }
-    
+
     // Commit transaction
     await session.commitTransaction();
-    
+
     // Lấy thông tin đầy đủ của khóa học đã cập nhật
     const finalCourse = await Course.findById(courseId)
       .populate({
@@ -470,12 +470,12 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
           select: 'title content type'
         }
       });
-    
+
     res.status(200).json({
       success: true,
       data: finalCourse
     });
-    
+
   } catch (error) {
     // Rollback transaction nếu có lỗi
     await session.abortTransaction();
@@ -498,13 +498,13 @@ export const approveCourse = asyncHandler(async (req, res, next) => {
   if (req.user.role !== 'admin') {
     return next(new ErrorResponse(`User ${req.user.id} is not authorized to approve courses`, 403));
   }
-  
+
   const course = await Course.findById(req.params.id);
-  
+
   if (!course) {
     return next(new ErrorResponse(`Course not found with id of ${req.params.id}`, 404));
   }
-  
+
   if (isApproved) {
     course.isApproved = true;
     course.approvedBy = req.user.id;
@@ -522,10 +522,10 @@ export const approveCourse = asyncHandler(async (req, res, next) => {
       message: `Course rejected: ${course.title} because of ${feedback}`,
     });
   }
-  
-  res.status(200).json({ 
-    success: true, 
-    data: course 
+
+  res.status(200).json({
+    success: true,
+    data: course
   });
 });
 
@@ -536,7 +536,7 @@ export const approveCourse = asyncHandler(async (req, res, next) => {
  */
 export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
   const userId = req.user._id;
-  
+
   // Tìm thông tin người dùng và các khóa học đã đăng ký
   const user = await User.findById(userId)
     .populate({
@@ -547,11 +547,11 @@ export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
         select: '_id fullname email profile'
       }
     });
-  
+
   if (!user) {
     return next(new ErrorResponse('User not found', 404));
   }
-  
+
   if (!user.enrolled_courses || user.enrolled_courses.length === 0) {
     return res.status(200).json({
       success: true,
@@ -559,28 +559,28 @@ export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
       data: []
     });
   }
-  
+
   // Lấy tiến trình học tập của người dùng
   const moduleProgresses = await ModuleProgress.find({ userId });
-  
+
   // Kết hợp thông tin khóa học với tiến trình học tập
   const coursesWithProgress = user.enrolled_courses.map(course => {
     // Lọc tiến trình của khóa học hiện tại
-    const courseProgress = moduleProgresses.filter(progress => 
+    const courseProgress = moduleProgresses.filter(progress =>
       progress.courseId.toString() === course._id.toString()
     );
-    
+
     // Tính toán tiến trình tổng thể
     let overallProgress = 0;
     if (courseProgress.length > 0) {
-      const totalCompletion = courseProgress.reduce((sum, progress) => 
+      const totalCompletion = courseProgress.reduce((sum, progress) =>
         sum + progress.completionPercentage, 0);
       overallProgress = totalCompletion / courseProgress.length;
     }
-    
+
     // Xác định trạng thái khóa học
     const status = overallProgress === 100 ? 'completed' : 'in-progress';
-    
+
     // Trả về thông tin khóa học với tiến trình
     return {
       ...course.toObject(),
@@ -591,7 +591,7 @@ export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
       }
     };
   });
-  
+
   res.status(200).json({
     success: true,
     count: coursesWithProgress.length,
@@ -607,14 +607,14 @@ export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
 export const deleteCourse = asyncHandler(async (req, res, next) => {
   const courseId = req.params.id;
   const userId = req.user.id;
-  
+
   try {
     // Kiểm tra quyền xóa khóa học
     await validateCourseOwnership(courseId, userId, req.user.role);
-    
+
     // Soft delete - cập nhật trạng thái thành 'deleted'
     await Course.findByIdAndUpdate(courseId, { status: 'deleted' });
-    
+
     res.status(200).json({
       success: true,
       message: 'Course deleted successfully'
@@ -640,3 +640,5 @@ export const getCourseStats = asyncHandler(async (req, res, next) => {
     data: { totalCourses, totalEnrollments, totalRevenue, pendingCourses, publishedCourses, unpublishedCourses, popularCourses }
   });
 });
+
+

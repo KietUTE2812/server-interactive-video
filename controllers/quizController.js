@@ -201,105 +201,93 @@ const answerQuiz = asyncHandler(async (req, res, next) => {
                 moduleItemId: quiz.moduleItem._id,
                 status: 'not-started',
                 attempts: 0,
-                timeSpent: 0
+                timeSpent: 0,
+                completionPercentage: 0
             };
             moduleProgress.moduleItemProgresses.push(moduleItemProgress);
             moduleItemProgressIndex = moduleProgress.moduleItemProgresses.length - 1;
         }
 
-        if (moduleItemProgress.status === 'completed' || moduleItemProgress.status === 'in-progress') {
-            const currentScore = scorePercentage;
-            const highestScore = moduleItemProgress.result.quiz.score || 0
-            if (currentScore > highestScore) {
-                moduleItemProgress.result.quiz = {
-                    score: currentScore,
-                    totalQuestions,
-                    correctAnswers,
-                    wrongAnswers,
-                    timeSpent,
-                    isPassed,
-                    answers: processedAnswers
-                };
-                moduleItemProgress.status = isPassed ? 'completed' : 'in-progress';
-                moduleItemProgress.attempts += 1
-                moduleItemProgress.timeSpent += timeSpent;
-                moduleItemProgress.startedAt = new Date();
-                if (isPassed) {
-                    moduleItemProgress.completedAt = new Date();
-                }
-                moduleProgress.moduleItemProgresses[moduleItemProgressIndex] = moduleItemProgress
-                await moduleProgress.save({ session });
-                await session.commitTransaction();
-                return res.status(200).json({
-                    success: true,
-                    data: {
-                        moduleItemProgress,
-                        currentScore: scorePercentage,
-                        passed: isPassed,
-                    }
-                });
+        // Cập nhật thông tin quiz progress
+        const currentScore = scorePercentage;
+        const highestScore = moduleItemProgress.result?.quiz?.score || 0;
 
-            }
-            else {
-                await session.commitTransaction();
-                return res.status(200).json({
-                    success: true,
-                    data: {
-                        moduleItemProgress,
-                        currentScore: scorePercentage,
-                        passed: isPassed,
-                    }
-                });
+        // Chỉ cập nhật nếu điểm hiện tại cao hơn điểm cao nhất
+        if (currentScore >= highestScore) {
+            // Khởi tạo result nếu chưa có
+            if (!moduleItemProgress.result) {
+                moduleItemProgress.result = {};
             }
 
-        }
-
-        moduleItemProgress.attempts += 1;
-        moduleItemProgress.timeSpent += timeSpent;
-        moduleItemProgress.status = isPassed ? 'completed' : 'in-progress';
-
-        if (!moduleItemProgress.startedAt) {
-            moduleItemProgress.startedAt = new Date();
-        }
-
-        if (isPassed) {
-            moduleItemProgress.completedAt = new Date();
-        }
-
-        moduleItemProgress.result = {
-            quiz: {
-                score: scorePercentage,
+            moduleItemProgress.result.quiz = {
+                score: currentScore,
                 totalQuestions,
                 correctAnswers,
                 wrongAnswers,
                 timeSpent,
                 isPassed,
                 answers: processedAnswers
-            }
-        };
-        moduleProgress.moduleItemProgresses[moduleItemProgressIndex] = moduleItemProgress;
-        await moduleProgress.save({ session });
-        await session.commitTransaction();
+            };
 
-        res.status(200).json({
-            success: true,
-            data: {
-                // moduleProgressId: moduleProgress._id,
-                // score: scorePercentage,
-                // totalPoints,
-                // earnedPoints,
-                // passed: isPassed,
-                // passingScore: quiz.passingScore,
-                // answers: processedAnswers,
-                // attempts: moduleItemProgress.attempts,
-                // totalTimeSpent: moduleItemProgress.timeSpent,
-                // status: moduleItemProgress.status,
-                // completionPercentage: moduleProgress.completionPercentage
-                moduleItemProgress,
-                currentScore: scorePercentage,
-                passed: isPassed,
+            // Cập nhật thông tin progress
+            moduleItemProgress.status = isPassed ? 'completed' : 'in-progress';
+            moduleItemProgress.completionPercentage = isPassed ? 100 : Math.min(scorePercentage, 95); // Chỉ 100% khi pass
+            moduleItemProgress.attempts += 1;
+            moduleItemProgress.timeSpent += timeSpent;
+
+            // Cập nhật thời gian
+            if (!moduleItemProgress.startedAt) {
+                moduleItemProgress.startedAt = new Date();
             }
-        });
+
+            if (isPassed) {
+                moduleItemProgress.completedAt = new Date();
+            }
+
+            // Gán lại vào array và đánh dấu đã thay đổi
+            moduleProgress.moduleItemProgresses[moduleItemProgressIndex] = moduleItemProgress;
+            moduleProgress.markModified('moduleItemProgresses');
+            moduleProgress.markModified(`moduleItemProgresses.${moduleItemProgressIndex}`);
+
+            await moduleProgress.save({ session });
+            await session.commitTransaction();
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    moduleItemProgress,
+                    currentScore: scorePercentage,
+                    passed: isPassed,
+                }
+            });
+        } else {
+            // Nếu điểm không cao hơn, vẫn cập nhật attempts và timeSpent
+            moduleItemProgress.attempts += 1;
+            moduleItemProgress.timeSpent += timeSpent;
+
+            if (!moduleItemProgress.startedAt) {
+                moduleItemProgress.startedAt = new Date();
+            }
+
+            // Gán lại vào array và đánh dấu đã thay đổi
+            moduleProgress.moduleItemProgresses[moduleItemProgressIndex] = moduleItemProgress;
+            moduleProgress.markModified('moduleItemProgresses');
+            moduleProgress.markModified(`moduleItemProgresses.${moduleItemProgressIndex}`);
+
+            await moduleProgress.save({ session });
+            await session.commitTransaction();
+
+            return res.status(200).json({
+                success: true,
+                data: {
+                    moduleItemProgress,
+                    currentScore: scorePercentage,
+                    passed: isPassed,
+                    message: 'Score not improved, progress not updated'
+                }
+            });
+        }
+
     } catch (error) {
         await session.abortTransaction();
         throw error;
