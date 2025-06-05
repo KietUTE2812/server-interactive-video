@@ -48,7 +48,6 @@ class Agent {
             } else {
                 out = response?.choices?.[0]?.message?.content || "";
             }
-            console.log("Response:", out);
             return out;
         }
         catch (error) {

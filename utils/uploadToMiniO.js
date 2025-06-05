@@ -5,11 +5,11 @@ dotenv.config();
 class MiniO {
     constructor() {
         this.minioClient = new Minio.Client({
-            endPoint: '40.81.24.159',
+            endPoint: process.env.MINIO_ENDPOINT,
             port: parseInt(process.env.MINIO_PORT) || 9000,
             useSSL: false,
-            accessKey: 'kltnadmin', 
-            secretKey: 'Kiet@2003'
+            accessKey: process.env.MINIO_ACCESS_KEY, 
+            secretKey: process.env.MINIO_SECRET_KEY
         });
     }
     config = (bucketName) => {

@@ -301,7 +301,8 @@ export const createCourse = asyncHandler(async (req, res, next) => {
   const instructorId = req.user.id;
   const courseData = {
     ...req.body,
-    instructor: instructorId
+    instructor: instructorId,
+    tags: req.body.tags.split(',')
   };
   // Upload video nếu có
   if (req.files) {

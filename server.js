@@ -7,6 +7,7 @@ import connectDB from "./config/dbConnect.js";
 import dotenv from 'dotenv';
 import { Server } from "socket.io";
 import minio from "./utils/uploadToMiniO.js";
+import mcpClient from "./config/mcpClient.js";
 
 // Load environment variables
 dotenv.config();
@@ -47,7 +48,12 @@ if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
   console.warn('Email credentials not provided. Email notifications will not work.');
 }
 
+// Start MCP client
+mcpClient.connectToServer("./config/mcpServer.js");
+
 // Start server
 server.listen(PORT, () => {
   console.log(`Server is up and running on port ${PORT}`);
 });
+
+export default server;

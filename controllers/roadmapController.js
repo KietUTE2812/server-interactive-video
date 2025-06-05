@@ -369,7 +369,7 @@ const submitTest = asyncHandler(async (req, res, next) => {
         });
     });
     // Update Roadmap
-    const roadmap = await Roadmap.findOne({ 'creator': userId });
+    const roadmap = await Roadmap.findOne({ 'creator': userId, 'phases.items.test': testId });
     if (!roadmap) {
         return next(new ErrorResponse(`Roadmap not found with id of ${userId}`, 404));
     }
