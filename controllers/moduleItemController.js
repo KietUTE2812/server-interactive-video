@@ -1009,7 +1009,7 @@ Ensure the new question:
 //   // Get the list of incorrect answers, formatted as bullet points
 //   const incorrectAnswers = answers
 //     .filter((ans) => !ans.isCorrect)
-//     .map((ans) => - "${ans.content}")
+//     .map((ans) => `- "${ans.content}"`)
 //     .join("\n");
 
 //   // Get the answer that the user selected
@@ -1020,7 +1020,7 @@ Ensure the new question:
 //   // Check if the selected answer is correct
 //   const isSelectedCorrect =
 //     answers.find((ans) => ans._id === selectedAnswer[0])?.isCorrect || false;
-//   const correctnessMsg = isSelectedCorrect ? "*correct*" : "*incorrect*";
+//   const correctnessMsg = isSelectedCorrect ? "**correct**" : "**incorrect**";
 
 //   // Construct the system and user messages
 //   return [

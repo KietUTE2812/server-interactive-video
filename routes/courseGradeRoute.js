@@ -6,6 +6,7 @@ import {
     getAssignment,
     updateAssignment,
     deleteAssignment,
+    getCourseGradeByCourseID,
 } from "../controllers/courseGradeController.js";
 import { protect, authorize } from "../middlewares/auth.js";
 
@@ -26,5 +27,6 @@ router.route('/:id/assignments/:id')
     .get(protect, getAssignment)
     .put(protect, updateAssignment)
     .delete(protect, authorize('admin', 'instructor'), deleteAssignment);
-
+router.route('/grade/:id')
+    .get(protect, getCourseGradeByCourseID);
 export default router;

@@ -2,7 +2,7 @@ import Assignment from "../models/Assignment.js"
 import CourseGrade from "../models/CourseGrade.js"
 import asyncHandler from "../middlewares/asyncHandler.js";
 import ErrorResponse from "../utils/ErrorResponse.js";
-
+import Progress from "../models/Progress.js";
 
 // // @desc      Get all course grades
 // // @route     GET /api/v1/coursegrades
@@ -147,4 +147,65 @@ export const deleteAssignment = asyncHandler(async (req, res) => {
 
     await assignment.remove();
     res.status(200).json({ message: "Assignment deleted successfully" });
+});
+
+export const getCourseGradeByCourseID = asyncHandler(async (req, res, next) => {
+    const courseID = req.params.id;
+    const userID = req.user.id;
+
+    // Populate moduleItemId để lấy thông tin type
+    const progressDocuments = await Progress.find({
+        courseId: courseID,
+        userId: userID
+    }).populate({
+        path: 'moduleItemProgresses.moduleItemId',
+        select: 'type title description _id'
+    });
+
+    if (!progressDocuments || progressDocuments.length === 0) {
+        return res.status(404).json({ message: "Not Found Progress" });
+    }
+
+    console.log(`Found ${progressDocuments.length} progress documents.`);
+
+    const relevantModuleItems = progressDocuments.flatMap(doc => {
+        if (doc.moduleItemProgresses && Array.isArray(doc.moduleItemProgresses)) {
+            return doc.moduleItemProgresses.filter(itemProgress => {
+                // Kiểm tra loại module item từ type field
+                const moduleItemType = itemProgress.moduleItemId?.type;
+
+                // Kiểm tra nếu type là programming hoặc quiz
+                if (moduleItemType === "programming" || moduleItemType === "quiz") {
+                    return true;
+                }
+
+                // Kiểm tra thêm trong result object nếu có
+                if (itemProgress.result) {
+                    return itemProgress.result.hasOwnProperty('programming') ||
+                        itemProgress.result.hasOwnProperty('quiz');
+                }
+
+                return false;
+            });
+        }
+        return [];
+    });
+
+    console.log("Filtered module items:", relevantModuleItems);
+
+    // Format data theo yêu cầu
+    const formattedData = relevantModuleItems.map(itemProgress => ({
+        title: itemProgress.moduleItemId?.title || 'Unknown Title',
+        Type: itemProgress.moduleItemId?.type || 'Unknown Type',
+        status: itemProgress.status,
+        completedAt: itemProgress.completedAt,
+        _id: itemProgress.moduleItemId?._id || itemProgress._id,
+        completionPercentage: itemProgress.completionPercentage
+    }));
+
+    res.status(200).json({
+        message: "Successfully retrieved relevant module items.",
+        count: formattedData.length,
+        data: formattedData
+    });
 });
