@@ -11,7 +11,6 @@ class NotificationService {
     this.emailService = getEmailService();
     this.setupKafkaProducer();
     this.setupKafkaConsumer();
-    this.startEmailProcessingQueue();
   }
 
   // Setup Kafka producer
@@ -30,7 +29,9 @@ class NotificationService {
     const topics = [
       kafkaConfig.topics.notifications,
       kafkaConfig.topics.userNotifications,
-      kafkaConfig.topics.groupNotifications
+      kafkaConfig.topics.groupNotifications,
+      kafkaConfig.topics.adminNotifications,
+      kafkaConfig.topics.emailNotifications
     ];
 
     this.consumer = createConsumer(topics);
@@ -52,6 +53,10 @@ class NotificationService {
           case kafkaConfig.topics.adminNotifications:
             await this.handleAdminNotification(messageValue);
             break;
+          // Handle email notification
+          case kafkaConfig.topics.emailNotifications:
+            await this.handleEmailNotification(messageValue);
+            break;
           default:
             console.log(`Unknown topic: ${message.topic}`);
         }
@@ -65,63 +70,8 @@ class NotificationService {
     });
   }
 
-  // Start email processing queue
-  startEmailProcessingQueue() {
-    // Process emails every minute
-    setInterval(async () => {
-      try {
-        this.processEmailNotifications();
-      } catch (error) {
-        console.error('Error processing email notifications:', error);
-      }
-    }, 60000); // Every minute
-  }
-
-  // Process email notifications
-  async processEmailNotifications() {
-    try {
-      // Find notifications that need email delivery but haven't been sent yet
-      const notificationsToSend = await Notification.find({
-        deliveryMethod: 'email',
-        emailSent: false
-      }).limit(50); // Process 50 at a time
-      
-      if (notificationsToSend.length === 0) return;
-      
-      console.log(`Processing ${notificationsToSend.length} email notifications`);
-      
-      for (const notification of notificationsToSend) {
-        try {
-          // If notification has direct email
-          if (notification.email) {
-            await this.emailService.sendNotificationEmail(notification);
-          } 
-          // If notification is for a user, get their email
-          else if (notification.user) {
-            const user = await User.findById(notification.user);
-            if (user && user.email) {
-              await this.emailService.sendNotificationEmailToUser(user, notification);
-            } else {
-              console.log(`User ${notification.user} has no email address`);
-            }
-          }
-          
-          // Mark notification as sent
-          notification.emailSent = true;
-          notification.emailSentAt = new Date();
-          await notification.save();
-          
-        } catch (error) {
-          console.error(`Error sending email for notification ${notification._id}:`, error);
-        }
-      }
-    } catch (error) {
-      console.error('Error processing email notifications:', error);
-    }
-  }
-
   // Send notification to Kafka
-  sendNotification(topic, notification) {
+  sendEvent(topic, notification) {
     return new Promise((resolve, reject) => {
       const payload = [
         {
@@ -145,6 +95,7 @@ class NotificationService {
 
   // Create notification in database and emit to socket
   async createNotificationAndEmit(notificationData) {
+    console.log('Creating notification:', notificationData);
     try {
       const notification = await Notification.create(notificationData);
       
@@ -152,16 +103,14 @@ class NotificationService {
       if (notification.deliveryMethod.includes('in-app')) {
         if (notification.user) {
           this.io.to(`user:${notification.user}`).emit('notification:new', notification);
-          console.log(`Emitting notification to user: ${notification.user}`);
         } else if (notification.userGroup) {
           this.io.to(`group:${notification.userGroup}`).emit('notification:new', notification);
-          console.log(`Emitting notification to group: ${notification.userGroup}`);
         }
       }
-      
       // If notification should be delivered by email and is email type, queue it
-      if (notification.deliveryMethod.includes('email') && notification.email) {
-        // Email will be processed by the email queue
+      if (notification.deliveryMethod.includes('email')) {
+        //Add to email queue
+        await this.sendEvent(kafkaConfig.topics.emailNotifications, notification);
       }
       
       return notification;
@@ -170,7 +119,24 @@ class NotificationService {
       throw error;
     }
   }
-
+  // Handle email notification
+  async handleEmailNotification(messageValue) {
+    try {
+      console.log('Sending email notification:', messageValue);
+      const user = await User.findById(messageValue.user);
+      if (user) {
+        const mailOptions = {
+          to: user.email,
+          subject: messageValue.title,
+          text: messageValue.message,
+          html: messageValue.htmlContent
+        };
+        this.emailService.sendEmail(mailOptions);
+      }
+    } catch (error) {
+      console.error('Error sending email notification:', error);
+    }
+  }
   // Handle broadcast notification (to all users)
   async handleBroadcastNotification(messageValue) {
     try {
@@ -237,7 +203,7 @@ class NotificationService {
   // Send notification to all users
   async sendBroadcastNotification(notification) {
     try { 
-      return await this.sendNotification(kafkaConfig.topics.notifications, notification);
+      return await this.sendEvent(kafkaConfig.topics.notifications, notification);
     } catch (error) {
       console.error('Error sending broadcast notification:', error);
       throw error;
@@ -252,7 +218,7 @@ class NotificationService {
         user: userId
       };
       
-      return await this.sendNotification(kafkaConfig.topics.userNotifications, notificationWithUser);
+      return await this.sendEvent(kafkaConfig.topics.userNotifications, notificationWithUser);
     } catch (error) {
       console.error('Error sending user notification:', error);
       throw error;
@@ -267,7 +233,7 @@ class NotificationService {
         userGroup: groupName
       };
       
-      return await this.sendNotification(kafkaConfig.topics.groupNotifications, notificationWithGroup);
+      return await this.sendEvent(kafkaConfig.topics.groupNotifications, notificationWithGroup);
     } catch (error) {
       console.error('Error sending group notification:', error);
       throw error;
@@ -277,46 +243,9 @@ class NotificationService {
   // Send notification to all admin
   async sendAdminNotification(notification) {
     try {
-      return await this.sendNotification(kafkaConfig.topics.adminNotifications, notification);
+      return await this.sendEvent(kafkaConfig.topics.adminNotifications, notification);
     } catch (error) {
       console.error('Error sending admin notification:', error);
-      throw error;
-    }
-  }
-  
-
-  // Send direct email notification
-  async sendEmailNotification(email, notification) {
-    try {
-      const notificationWithEmail = {
-        ...notification,
-        email,
-        notificationType: 'email',
-        deliveryMethod: ['email']
-      };
-      
-      // Create notification directly in database
-      await this.createNotificationAndEmit(notificationWithEmail);
-      
-      return true;
-    } catch (error) {
-      console.error('Error sending email notification:', error);
-      throw error;
-    }
-  }
-
-  // Send HTML notification to user
-  async sendHtmlNotification(userId, notification) {
-    try {
-      const notificationWithUser = {
-        ...notification,
-        user: userId,
-        htmlContent: notification.htmlContent
-      };
-      
-      return await this.sendNotification(kafkaConfig.topics.userNotifications, notificationWithUser);
-    } catch (error) {
-      console.error('Error sending HTML notification:', error);
       throw error;
     }
   }

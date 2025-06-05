@@ -6,7 +6,7 @@
   "scripts": {
     "start": "nodemon server.js",
     "dev": "nodemon server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": " NODE_OPTIONS='--experimental-vm-modules' npx jest"
   },
   "author": "",
   "license": "ISC",
@@ -15,16 +15,20 @@
     "@aws-sdk/client-s3": "^3.693.0",
     "@azure/msal-node": "^2.14.0",
     "@google-cloud/storage": "^7.16.0",
+    "@google/genai": "^1.3.0",
     "@google/generative-ai": "^0.24.0",
     "@gradio/client": "^1.13.0",
     "@huggingface/inference": "^3.4.1",
     "@microsoft/microsoft-graph-client": "^3.0.7",
+    "@modelcontextprotocol/sdk": "^1.12.1",
     "assemblyai": "^4.9.0",
     "async": "^3.2.6",
     "aws-sdk": "^2.1692.0",
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",
     "body-parser": "^1.20.3",
+    "chai": "^5.2.0",
+    "chai-http": "^5.1.2",
     "cloudinary": "^2.5.1",
     "cookie-session": "^2.1.0",
     "cors": "^2.8.5",
@@ -43,6 +47,7 @@
     "jsonwebtoken": "^9.0.2",
     "kafka-node": "^5.0.0",
     "minio": "^8.0.2",
+    "mocha": "^11.5.0",
     "monacopilot": "^1.1.18",
     "mongodb": "^6.10.0",
     "mongoose": "^8.6.3",
@@ -63,6 +68,11 @@
     "request": "^2.88.2",
     "socket.io": "^4.8.1",
     "uuid": "^10.0.0",
-    "vnpay": "^1.6.0"
+    "vnpay": "^1.6.0",
+    "zod": "^3.25.49"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^7.1.1"
   }
 }
