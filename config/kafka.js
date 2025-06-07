@@ -7,7 +7,9 @@ const kafkaConfig = {
   topics: {
     notifications: 'notifications',
     userNotifications: 'user-notifications',
-    groupNotifications: 'group-notifications'
+    groupNotifications: 'group-notifications',
+    adminNotifications: 'admin-notifications',
+    emailNotifications: 'email-notifications'
   }
 };
 
@@ -23,7 +25,20 @@ const createKafkaClient = () => {
 // Create Kafka producer
 const createProducer = () => {
   const client = createKafkaClient();
-  return new Producer(client);
+  //create producer
+  const producer = new Producer(client);
+  //create topic if not exists
+  const topics = Object.values(kafkaConfig.topics);
+  topics.forEach(topic => {
+    client.createTopics([{ topic, partitions: 1, replicationFactor: 1 }], (err, result) => {
+      if (err) {
+        console.error(`Error creating topic ${topic}:`, err);
+      }
+    });
+  });
+  
+  //return producer
+  return producer;
 };
 
 // Create Kafka consumer

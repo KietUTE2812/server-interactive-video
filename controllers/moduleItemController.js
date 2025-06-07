@@ -40,7 +40,7 @@ export const createModuleItemSupplement = asyncHandler(
     const course = await Course.findById(courseId);
     if (!course) {
       return next(
-        new ErrorResponse(`No found course with id ${courseId}`, 404)
+        new ErrorResponse("No found course with id ${courseId}", 404)
       );
     }
 
@@ -51,7 +51,7 @@ export const createModuleItemSupplement = asyncHandler(
     });
     if (!module) {
       return next(
-        new ErrorResponse(`No found module with id ${moduleId}`, 404)
+        new ErrorResponse("No found module with id ${moduleId}", 404)
       );
     }
 
@@ -61,7 +61,7 @@ export const createModuleItemSupplement = asyncHandler(
       req.user.role !== "admin"
     ) {
       return next(
-        new ErrorResponse(`User is not authorized to create module item`, 401)
+        new ErrorResponse("User is not authorized to create module item", 401)
       );
     }
     const bucketName = process.env.MINIO_BUCKET_NAME;
@@ -171,7 +171,7 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
       if (!course) {
         await session.abortTransaction();
         return next(
-          new ErrorResponse(`No found course with id ${courseId}`, 404)
+          new ErrorResponse("No found course with id ${courseId}", 404)
         );
       }
       const module = await Module.findOne({
@@ -182,7 +182,7 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
       if (!module) {
         await session.abortTransaction();
         return next(
-          new ErrorResponse(`No found module with id ${moduleId}`, 404)
+          new ErrorResponse("No found module with id ${moduleId}", 404)
         );
       }
 
@@ -193,7 +193,7 @@ export const createModuleItemLecture = asyncHandler(async (req, res, next) => {
       ) {
         await session.abortTransaction();
         return next(
-          new ErrorResponse(`User is not authorized to create module item`, 401)
+          new ErrorResponse("User is not authorized to create module item", 401)
         );
       }
 
@@ -320,7 +320,7 @@ export const createModuleItemQuiz = asyncHandler(async (req, res, next) => {
   // Find the course
   const course = await Course.findById(courseId);
   if (!course) {
-    return next(new ErrorResponse(`No found course with id ${courseId}`, 404));
+    return next(new ErrorResponse("No found course with id ${courseId}", 404));
   }
 
   // Find the module
@@ -329,7 +329,7 @@ export const createModuleItemQuiz = asyncHandler(async (req, res, next) => {
     index: moduleId,
   });
   if (!module) {
-    return next(new ErrorResponse(`No found module with id ${moduleId}`, 404));
+    return next(new ErrorResponse("No found module with id ${moduleId}", 404));
   }
 
   const quizData = {
@@ -350,7 +350,7 @@ export const createModuleItemQuiz = asyncHandler(async (req, res, next) => {
     req.user.role !== "admin"
   ) {
     return next(
-      new ErrorResponse(`User is not authorized to create module item`, 401)
+      new ErrorResponse("User is not authorized to create module item", 401)
     );
   }
 
@@ -417,7 +417,7 @@ export const createModuleItemProgramming = asyncHandler(
     const course = await Course.findById(courseId);
     if (!course) {
       return next(
-        new ErrorResponse(`No found course with id ${courseId}`, 404)
+        new ErrorResponse("No found course with id ${courseId}", 404)
       );
     }
 
@@ -428,7 +428,7 @@ export const createModuleItemProgramming = asyncHandler(
     });
     if (!module) {
       return next(
-        new ErrorResponse(`No found module with id ${moduleId}`, 404)
+        new ErrorResponse("No found module with id ${moduleId}", 404)
       );
     }
 
@@ -444,7 +444,7 @@ export const createModuleItemProgramming = asyncHandler(
       req.user.role !== "admin"
     ) {
       return next(
-        new ErrorResponse(`User is not authorized to create module item`, 401)
+        new ErrorResponse("User is not authorized to create module item", 401)
       );
     }
 
@@ -514,7 +514,7 @@ export const getModuleItemById = asyncHandler(async (req, res, next) => {
 
   if (!moduleItem) {
     return next(
-      new ErrorResponse(`No module item found with id ${moduleItemId}`, 404)
+      new ErrorResponse("No module item found with id ${moduleItemId}", 404)
     );
   }
 
@@ -688,7 +688,7 @@ export const editLectureByItemId = asyncHandler(async (req, res, next) => {
       if (!moduleItem) {
         await session.abortTransaction();
         return next(
-          new ErrorResponse(`No found module item with id ${itemId}`, 404)
+          new ErrorResponse("No found module item with id ${itemId}", 404)
         );
       }
       console.log("videoData", videoData);
@@ -719,7 +719,7 @@ export const editLectureByItemId = asyncHandler(async (req, res, next) => {
       );
       if (!video) {
         await session.abortTransaction();
-        return next(new ErrorResponse(`No found video to update`, 404));
+        return next(new ErrorResponse("No found video to update", 404));
       }
 
       const updatedModuleItem = await ModuleItem.findByIdAndUpdate(
@@ -740,7 +740,7 @@ export const editLectureByItemId = asyncHandler(async (req, res, next) => {
 
       if (!updatedModuleItem) {
         await session.abortTransaction();
-        return next(new ErrorResponse(`Failed to update module item`, 400));
+        return next(new ErrorResponse("Failed to update module item", 400));
       }
 
       await session.commitTransaction();
@@ -781,7 +781,7 @@ export const editQuizByItemId = asyncHandler(async (req, res, next) => {
     if (!moduleItem) {
       await session.abortTransaction();
       return next(
-        new ErrorResponse(`No found module item with id ${itemId}`, 404)
+        new ErrorResponse("No found module item with id ${itemId}", 404)
       );
     }
 
@@ -814,7 +814,7 @@ export const editQuizByItemId = asyncHandler(async (req, res, next) => {
 
     if (!quiz) {
       await session.abortTransaction();
-      return next(new ErrorResponse(`No found quiz to update`, 404));
+      return next(new ErrorResponse("No found quiz to update", 404));
     }
 
     const updatedModuleItem = await ModuleItem.findByIdAndUpdate(
@@ -835,7 +835,7 @@ export const editQuizByItemId = asyncHandler(async (req, res, next) => {
 
     if (!updatedModuleItem) {
       await session.abortTransaction();
-      return next(new ErrorResponse(`Failed to update module item`, 400));
+      return next(new ErrorResponse("Failed to update module item", 400));
     }
 
     await session.commitTransaction();
@@ -866,7 +866,7 @@ export const editProgrammingByItemId = asyncHandler(async (req, res, next) => {
     const moduleItem = await ModuleItem.findById(itemId);
     if (!moduleItem) {
       return next(
-        new ErrorResponse(`No found module item with id ${itemId}`, 404)
+        new ErrorResponse("No found module item with id ${itemId}", 404)
       );
     }
     await session.startTransaction();
@@ -902,7 +902,7 @@ export const editProgrammingByItemId = asyncHandler(async (req, res, next) => {
 
     if (!program) {
       await session.abortTransaction();
-      return next(new ErrorResponse(`No found program to update`, 404));
+      return next(new ErrorResponse("No found program to update", 404));
     }
 
     const updatedModuleItem = await ModuleItem.findByIdAndUpdate(
@@ -927,7 +927,7 @@ export const editProgrammingByItemId = asyncHandler(async (req, res, next) => {
 
     if (!updatedModuleItem) {
       await session.abortTransaction();
-      return next(new ErrorResponse(`Failed to update module item`, 400));
+      return next(new ErrorResponse("Failed to update module item", 400));
     }
 
     await session.commitTransaction();
@@ -956,7 +956,7 @@ function generatePrompt(currQuestion, selectedAnswer, historyAns) {
   // Get the list of incorrect answers, formatted as bullet points
   const incorrectAnswers = answers
     .filter((ans) => !ans.isCorrect)
-    .map((ans) => `- "${ans.content}"`)
+      .map((ans) => "- ${ans.content}")
     .join("\n");
 
   // Get the answer that the user selected
@@ -967,7 +967,7 @@ function generatePrompt(currQuestion, selectedAnswer, historyAns) {
   // Check if the selected answer is correct
   const isSelectedCorrect =
     answers.find((ans) => ans._id === selectedAnswer[0])?.isCorrect || false;
-  const correctnessMsg = isSelectedCorrect ? "**correct**" : "**incorrect**";
+  const correctnessMsg = isSelectedCorrect ? "*correct*" : "*incorrect*";
 
   // Construct the prompt with clear sections and instructions
   return `
@@ -1344,7 +1344,7 @@ export const updateInteractiveQuestion = asyncHandler(
         );
 
         console.log(
-          `User ${userId} answered incorrectly. Checking for existing not-started questions...`
+          `User ${userId} answered incorrectly. Checking for existing not-started questions...`   
         );
 
         // Kiểm tra trong lịch sử có câu hỏi nào ở trạng thái not-started không

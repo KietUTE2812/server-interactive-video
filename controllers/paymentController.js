@@ -685,7 +685,7 @@ const createPayment = asyncHandler(async (req, res, next) => {
     }); 
     const course = await Course.findOne({courseId: courseId})
     // Kiểm tra payment có tồn tại không
-    const checkPayment = await Payment.findOne({ userId: userId, courseId: course._id});
+    const checkPayment = await Payment.findOne({ userId: userId, courseId: course._id, paymentStatus: 'success'});
     if (checkPayment) {
         return next(new ErrorResponse(`Payment already exists with user id of ${userId} and course id of ${course._id}`, 400));
     }

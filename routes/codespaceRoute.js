@@ -7,6 +7,7 @@ import {
   startCodespace,
   stopCodespace,
   listPublicRepositories,
+  createRepository,
 } from '../controllers/codespaceController.js';
 import { protect } from '../middlewares/auth.js';
 const router = express.Router();
@@ -18,6 +19,6 @@ router.post('/', protect, createCodespace);
 router.post('/:codespaceId/start', protect, startCodespace);
 router.post('/:codespaceId/stop', protect, stopCodespace);
 router.get('/public-repositories/get', protect, listPublicRepositories);
-
+router.post('/public-repositories/create', protect, createRepository);
 
 export default router;

@@ -28,7 +28,7 @@ class EmailService {
   async sendEmail(options) {
     try {
       const mailOptions = {
-        from: `"${process.env.EMAIL_FROM_NAME || 'Notification System'}" <${process.env.EMAIL_FROM || process.env.GMAIL_USER}>`,
+        from: `"${process.env.EMAIL_FROM_NAME || 'CodeChef Notification'}" <${process.env.EMAIL_FROM || process.env.GMAIL_USER}>`,
         to: options.to,
         subject: options.subject,
         text: options.text,
@@ -57,51 +57,6 @@ class EmailService {
       console.error('Error sending email:', error);
       throw error;
     }
-  }
-
-  // Send notification email
-  async sendNotificationEmail(notification) {
-    // Use HTML content if available, otherwise convert message to HTML
-    const htmlContent = notification.htmlContent || 
-                       `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                          <h2 style="color: #333;">${notification.title}</h2>
-                          <p>${notification.message.replace(/\n/g, '<br>')}</p>
-                          ${notification.link && notification.link !== '#' ? 
-                            `<p><a href="${notification.link}" style="display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">View Details</a></p>` : 
-                            ''}
-                        </div>`;
-
-    return this.sendEmail({
-      to: notification.email,
-      subject: notification.title,
-      text: notification.message,
-      html: htmlContent
-    });
-  }
-
-  // Send notification email to user
-  async sendNotificationEmailToUser(user, notification) {
-    if (!user.email) {
-      throw new Error('User does not have an email address');
-    }
-
-    // Use HTML content if available, otherwise convert message to HTML
-    const htmlContent = notification.htmlContent || 
-                       `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-                          <h2 style="color: #333;">${notification.title}</h2>
-                          <p>Hello ${user.name || user.email},</p>
-                          <p>${notification.message.replace(/\n/g, '<br>')}</p>
-                          ${notification.link && notification.link !== '#' ? 
-                            `<p><a href="${notification.link}" style="display: inline-block; padding: 10px 20px; background-color: #4CAF50; color: white; text-decoration: none; border-radius: 4px;">View Details</a></p>` : 
-                            ''}
-                        </div>`;
-
-    return this.sendEmail({
-      to: user.email,
-      subject: notification.title,
-      text: notification.message,
-      html: htmlContent
-    });
   }
 
   // Test email connection
