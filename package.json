@@ -88,8 +88,7 @@
     "cypress": "^13.6.0",
     "jest": "^29.7.0",
     "mongodb-memory-server": "^9.1.0",
-    "supertest": "^6.3.3",
-    "k6": "^0.47.0"
+    "supertest": "^6.3.3"
   },
   "jest": {
     "testEnvironment": "node",
