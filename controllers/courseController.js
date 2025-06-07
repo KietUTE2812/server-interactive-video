@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import ModuleProgress from "../models/Progress.js";
 import minio from "../utils/uploadToMiniO.js";
 import dotenv from "dotenv";
+import Progress from "../models/Progress.js";
 dotenv.config();
 
 import { getNotificationService } from "../services/notificationService.js";
@@ -534,6 +535,70 @@ export const approveCourse = asyncHandler(async (req, res, next) => {
  * @route     GET /api/v1/learns/my-learning
  * @access    Private (Student, Admin)
  */
+// export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
+//   const userId = req.user._id;
+
+//   // Tìm thông tin người dùng và các khóa học đã đăng ký
+//   const user = await User.findById(userId)
+//     .populate({
+//       path: 'enrolled_courses',
+//       select: '_id price courseId title description level photo averageRating courseReviews instructor',
+//       populate: {
+//         path: 'instructor',
+//         select: '_id fullname email profile'
+//       }
+//     });
+
+//   if (!user) {
+//     return next(new ErrorResponse('User not found', 404));
+//   }
+
+//   if (!user.enrolled_courses || user.enrolled_courses.length === 0) {
+//     return res.status(200).json({
+//       success: true,
+//       count: 0,
+//       data: []
+//     });
+//   }
+
+//   // Lấy tiến trình học tập của người dùng
+//   const moduleProgresses = await ModuleProgress.find({ userId });
+
+//   // Kết hợp thông tin khóa học với tiến trình học tập
+//   const coursesWithProgress = user.enrolled_courses.map(course => {
+//     // Lọc tiến trình của khóa học hiện tại
+//     const courseProgress = moduleProgresses.filter(progress =>
+//       progress.courseId.toString() === course._id.toString()
+//     );
+
+//     // Tính toán tiến trình tổng thể
+//     let overallProgress = 0;
+//     if (courseProgress.length > 0) {
+//       const totalCompletion = courseProgress.reduce((sum, progress) =>
+//         sum + progress.completionPercentage, 0);
+//       overallProgress = totalCompletion / courseProgress.length;
+//     }
+
+//     // Xác định trạng thái khóa học
+//     const status = overallProgress === 100 ? 'completed' : 'in-progress';
+
+//     // Trả về thông tin khóa học với tiến trình
+//     return {
+//       ...course.toObject(),
+//       progress: {
+//         overallPercentage: overallProgress,
+//         status,
+//         moduleDetails: courseProgress
+//       }
+//     };
+//   });
+
+//   res.status(200).json({
+//     success: true,
+//     count: coursesWithProgress.length,
+//     data: coursesWithProgress
+//   });
+// });
 export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
   const userId = req.user._id;
 
@@ -560,33 +625,109 @@ export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
     });
   }
 
-  // Lấy tiến trình học tập của người dùng
-  const moduleProgresses = await ModuleProgress.find({ userId });
+  // Lấy tất cả progress của user một lần để tối ưu performance
+  const courseIds = user.enrolled_courses.map(course => course._id);
+  const allProgress = await Progress.find({
+    userId,
+    courseId: { $in: courseIds }
+  })
+    .populate({
+      path: "moduleItemProgresses.moduleItemId",
+      select: "title type description duration video quiz programming",
+    })
+    .populate("moduleId", "title index");
 
-  // Kết hợp thông tin khóa học với tiến trình học tập
-  const coursesWithProgress = user.enrolled_courses.map(course => {
-    // Lọc tiến trình của khóa học hiện tại
-    const courseProgress = moduleProgresses.filter(progress =>
-      progress.courseId.toString() === course._id.toString()
-    );
+  // Group progress theo courseId
+  const progressByCourse = {};
+  allProgress.forEach(progress => {
+    const courseId = progress.courseId.toString();
+    if (!progressByCourse[courseId]) {
+      progressByCourse[courseId] = [];
+    }
+    progressByCourse[courseId].push(progress);
+  });
 
-    // Tính toán tiến trình tổng thể
-    let overallProgress = 0;
-    if (courseProgress.length > 0) {
-      const totalCompletion = courseProgress.reduce((sum, progress) =>
-        sum + progress.completionPercentage, 0);
-      overallProgress = totalCompletion / courseProgress.length;
+  // Định nghĩa trọng số
+  const ITEM_WEIGHTS = {
+    lecture: 3,
+    quiz: 2,
+    programming: 4,
+    supplement: 1,
+  };
+
+  // Function để tính weighted progress
+  const calculateWeightedProgress = (courseProgress) => {
+    if (!courseProgress || courseProgress.length === 0) {
+      return {
+        percentage: 0,
+        details: {
+          totalWeight: 0,
+          completedWeight: 0,
+          totalItems: 0,
+          completedItems: 0
+        }
+      };
     }
 
-    // Xác định trạng thái khóa học
-    const status = overallProgress === 100 ? 'completed' : 'in-progress';
+    let totalWeight = 0;
+    let completedWeight = 0;
+    let totalModuleItems = 0;
+    let completedModuleItems = 0;
 
-    // Trả về thông tin khóa học với tiến trình
+    courseProgress.forEach((moduleProgress) => {
+      moduleProgress.moduleItemProgresses.forEach((itemProgress) => {
+        totalModuleItems++;
+
+        const moduleItem = itemProgress.moduleItemId;
+        const itemType =
+          moduleItem?.type ||
+          (moduleItem?.video ? "lecture" :
+            moduleItem?.quiz ? "quiz" :
+              moduleItem?.programming ? "programming" : "supplement");
+
+        const weight = ITEM_WEIGHTS[itemType] || 1;
+        totalWeight += weight;
+
+        if (itemProgress.status === "completed") {
+          completedModuleItems++;
+          completedWeight += weight;
+        } else if (itemProgress.completionPercentage > 0) {
+          const partialWeight = (weight * itemProgress.completionPercentage) / 100;
+          completedWeight += partialWeight;
+        }
+      });
+    });
+
+    const percentage = totalWeight > 0 ? Math.round((completedWeight / totalWeight) * 100) : 0;
+
+    return {
+      percentage,
+      details: {
+        totalWeight,
+        completedWeight: parseFloat(completedWeight.toFixed(2)),
+        totalItems: totalModuleItems,
+        completedItems: completedModuleItems
+      }
+    };
+  };
+
+  // Tính progress cho từng course
+  const coursesWithProgress = user.enrolled_courses.map(course => {
+    const courseId = course._id.toString();
+    const courseProgress = progressByCourse[courseId] || [];
+
+    const progressResult = calculateWeightedProgress(courseProgress);
+    const overallProgress = progressResult.percentage;
+
+    const status = overallProgress === 100 ? 'completed' :
+      overallProgress > 0 ? 'in-progress' : 'not-started';
+
     return {
       ...course.toObject(),
       progress: {
         overallPercentage: overallProgress,
         status,
+        weightedCompletion: progressResult.details,
         moduleDetails: courseProgress
       }
     };
@@ -598,7 +739,6 @@ export const getAllCoursebyUser = asyncHandler(async (req, res, next) => {
     data: coursesWithProgress
   });
 });
-
 /**
  * @desc      Xóa khóa học (Soft delete)
  * @route     DELETE /api/v1/learns/:id
