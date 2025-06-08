@@ -1,6 +1,8 @@
 import pkg from 'kafka-node';
 const { KafkaClient, Producer, Consumer }  = pkg;
+import dotenv from 'dotenv';
 
+dotenv.config();
 const kafkaConfig = {
   kafkaHost: process.env.KAFKA_HOST || 'localhost:9092',
   clientId: 'notification-service',
