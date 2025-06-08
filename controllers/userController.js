@@ -322,14 +322,15 @@ const loginUserCtrl = asyncHandler(async (req, res, next) => {
                 
                 // Set refresh token cookie
                 setRefreshTokenCookie(res, refreshToken);
-                
+                const accessToken = token.generateToken({_id: user._id, role: user.role});
+                console.log("accessToken", accessToken);
                 // Send response with access token
                 res.status(200).json(createResponse(
                     true,
                     "Login successfully",
                     {
                         user,
-                        token: token.generateToken(user._id)
+                        token: accessToken
                     }
                 ));
             } else {
