@@ -57,10 +57,32 @@ app.use(express.json({
   limit: '*'
 }))
 // Enable CORS
+// app.use(cors({
+//   origin: [process.env.CLIENT_URL, 'http://localhost:5173'], // Use environment variable for client URL
+//   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Các phương thức được phép
+//   credentials: true, // Nếu bạn cần gửi cookie hoặc authentication headers
+// }));
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173', // Use environment variable for client URL
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'], // Các phương thức được phép
-  credentials: true, // Nếu bạn cần gửi cookie hoặc authentication headers
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      process.env.CLIENT_URL,
+      'http://localhost:5173',
+      'http://localhost:3000'
+    ];
+
+    // Cho phép requests không có origin (mobile apps, Postman)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log('Blocked origin:', origin);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  credentials: true,
+  optionsSuccessStatus: 200 // Cho IE11
 }));
 
 const verifyRecaptcha = async (token) => {
