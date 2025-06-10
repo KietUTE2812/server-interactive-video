@@ -8,7 +8,10 @@ import jwt from 'jsonwebtoken';
 import ErrorResponse from "../utils/ErrorResponse.js";
 import Group from '../models/Group.js';
 import Payment from '../models/Payment.js';
-import notificationService from '../services/notificationService.js';
+import { getNotificationService } from '../services/notificationService.js';
+import { kafkaConfig } from '../config/kafka.js';
+import dotenv from 'dotenv';
+dotenv.config();
 
 /**
  * Helper function to create a standardized API response
@@ -272,7 +275,7 @@ const loginUserCtrl = asyncHandler(async (req, res, next) => {
                 "Login successfully",
                 {
                     user,
-                    token: token.generateToken(user._id)
+                    token: token.generateToken({_id: user._id, role: user.role})
                 }
             ));
         }
@@ -296,7 +299,7 @@ const loginUserCtrl = asyncHandler(async (req, res, next) => {
                 "Login successfully",
                 {
                     user,
-                    token: token.generateToken(user._id)
+                    token: token.generateToken({_id: user._id, role: user.role})
                 }
             ));
         }
@@ -338,6 +341,7 @@ const loginUserCtrl = asyncHandler(async (req, res, next) => {
             }
         }
     } catch (error) {
+        console.log(error);
         return next(new ErrorResponse(error.message, 500));
     }
 });
@@ -534,9 +538,10 @@ const resetPasswordCtrl = asyncHandler(async (req, res, next) => {
         res.status(200).json(createResponse(
             true,
             'Password reset successful!',
-            { token: token.generateToken(user._id) }
+            { token: token.generateToken({_id: user._id, role: user.role}) }
         ));
     } catch (err) {
+        console.log(err);   
         return next(new ErrorResponse('Failed to reset password', 500));
     }
 });
@@ -588,7 +593,7 @@ const refreshAccessTokenCtrl = asyncHandler(async (req, res, next) => {
         setRefreshTokenCookie(res, refreshToken);
         
         // Generate new access token
-        const newAccessToken = token.generateToken(user._id);
+        const newAccessToken = token.generateToken({_id: user._id, role: user.role});
         
         res.status(200).json(createResponse(
             true,
@@ -637,7 +642,7 @@ const logoutCtrl = asyncHandler(async (req, res, next) => {
 // @access  Private/Admin/Instructor
 const getAllUserCtrl = asyncHandler(async (req, res, next) => {
     const { limit = 10, page = 1, ...filters } = req.query;
-    const query = {};
+    let query = {};
     
     // Check permissions for non-admin users
     if (req.user.role !== 'admin') {
@@ -666,6 +671,16 @@ const getAllUserCtrl = asyncHandler(async (req, res, next) => {
     if (filters.role) {
         query.role = filters.role;
     }
+
+    if (filters.search) {
+        query = {
+            $or: [
+                { email: { $regex: filters.search, $options: 'i' } },
+                { username: { $regex: filters.search, $options: 'i' } },
+                { 'profile.fullname': { $regex: filters.search, $options: 'i' } }
+            ]
+        }
+    }
     
     if (filters.courseId) {
         query.enrolled_courses = { $in: [filters.courseId] };
@@ -686,7 +701,7 @@ const getAllUserCtrl = asyncHandler(async (req, res, next) => {
         .select('profile email username role status')
         .limit(parsedLimit)
         .skip(parsedLimit * (parsedPage - 1))
-        .sort({ createdAt: -1 });
+        .sort({ createAt: -1 });
 
     if (filters.isPaid === 'true') {
         const paidUsers = await Payment.find({userId: {$in: users.map(user => user._id)}});
@@ -841,6 +856,79 @@ const getStatsUserCtrl = asyncHandler(async (req, res, next) => {
     ));
 });
 
+const addUserByExcelCtrl = asyncHandler(async (req, res, next) => {
+    const { users } = req.body;
+
+    // Generate password for new users (8 characters long, at least one lowercase letter, one uppercase letter, one number and one special character)
+    function generatePassword(length = 12) {
+        const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+        const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        const numbers = '0123456789';
+        const specialCharacters = '!@#$%^&*()';
+      
+        // 1 ký tự mỗi loại bắt buộc
+        let passwordChars = [
+          lowercase[Math.floor(Math.random() * lowercase.length)],
+          uppercase[Math.floor(Math.random() * uppercase.length)],
+          numbers[Math.floor(Math.random() * numbers.length)],
+          specialCharacters[Math.floor(Math.random() * specialCharacters.length)],
+        ];
+      
+        const allChars = lowercase + uppercase + numbers + specialCharacters;
+      
+        // Thêm các ký tự ngẫu nhiên để đủ độ dài
+        for (let i = passwordChars.length; i < length; i++) {
+          passwordChars.push(allChars[Math.floor(Math.random() * allChars.length)]);
+        }
+      
+        // Trộn ngẫu nhiên vị trí các ký tự
+        for (let i = passwordChars.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [passwordChars[i], passwordChars[j]] = [passwordChars[j], passwordChars[i]];
+        }
+      
+        return passwordChars.join('');
+      }
+    const newUsers = users.map(user => ({
+        profile: {
+            fullname: user.fullname,
+            phone: user.phone
+        },
+        username: user.email,
+        email: user.email,
+        password: generatePassword(),
+        userId: uuidv4(),
+        role: user.role,
+        status: 'active'
+    }));
+
+    const hashedUsers = await Promise.all(newUsers.map(async (user) => ({ 
+        ...user,
+        password: await bcrypt.hash(user.password, 12)
+    })));
+    console.log(hashedUsers);
+
+    const savedUsers = await User.insertMany(hashedUsers);
+
+    // send email to new users by kafka
+    const notificationService = getNotificationService();
+    newUsers.forEach(async (user) => {
+        const notification = {
+            title: 'Welcome to Code Chef. Your account has been created successfully.',
+            message: 'Welcome to Code Chef. Your account has been created successfully. For more information, please contact us',
+            htmlContent: '<p>Welcome to Code Chef. Your account has been created successfully.</p><p>Your password is: ' + user.password + '</p>',
+            user: savedUsers.find(savedUser => savedUser.email === user.email)._id
+        }
+        notificationService.sendEvent(kafkaConfig.topics.emailNotifications, notification);
+    });
+
+    res.status(200).json(createResponse(
+        true,
+        "Users added successfully",
+        newUsers
+    ));
+});
+
 export default {
     registerUserCtrl,
     loginUserCtrl,
@@ -860,5 +948,6 @@ export default {
     addUserToGroupCtrl,
     removeUserFromGroupCtrl,
     deleteGroupCtrl,
-    getStatsUserCtrl
+    getStatsUserCtrl,
+    addUserByExcelCtrl
 };

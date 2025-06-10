@@ -97,6 +97,17 @@ class NotificationService {
   async createNotificationAndEmit(notificationData) {
     console.log('Creating notification:', notificationData);
     try {
+      const existing = await Notification.findOne({
+        title: notificationData.title,
+        message: notificationData.message,
+        user: notificationData.user,
+        createdAt: { $gt: new Date(Date.now() - 10000) } // trong 10s gần nhất
+      });
+      
+      if (existing) {
+        console.log("Duplicate notification skipped");
+        return existing;
+      }
       const notification = await Notification.create(notificationData);
       
       // Only emit in-app notifications to socket

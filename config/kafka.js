@@ -1,5 +1,5 @@
 import pkg from 'kafka-node';
-const { KafkaClient, Producer, Consumer }  = pkg;
+const { KafkaClient, Producer, Consumer, ConsumerGroup }  = pkg;
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -46,15 +46,14 @@ const createProducer = () => {
 // Create Kafka consumer
 const createConsumer = (topics) => {
   const client = createKafkaClient();
-  return new Consumer(
-    client,
-    topics.map(topic => ({ topic })),
+  return new ConsumerGroup(
     {
+      kafkaHost: kafkaConfig.kafkaHost,
+      groupId: 'notification-service-group', // quan trọng!
       autoCommit: true,
-      fetchMaxWaitMs: 1000,
-      fetchMaxBytes: 1024 * 1024,
-      encoding: 'utf8'
-    }
+      fromOffset: 'latest'
+    },
+    topics
   );
 };
 

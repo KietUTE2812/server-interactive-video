@@ -3,6 +3,7 @@ import userCtrl from "../controllers/userController.js";
 import { isLoggedin } from "../middlewares/isLoggedin.js";
 import { verifyToken } from "../utils/verifyToken.js";
 import upload from "../config/fileUpload.js";
+import handleFile from "../middlewares/upload.js";
 import { protect, authorize } from "../middlewares/auth.js";
 import isAdmin from "../middlewares/isAdmin.js";
 import { checkAuth, verifyPassword } from "../controllers/authController.js";
@@ -88,5 +89,7 @@ userRoutes.put('/update-by-admin/:userid',
 );
 
 statsRoutes.get('/', protect, authorize('admin'), userCtrl.getStatsUserCtrl);
+
+userRoutes.post('/add-user-by-excel', protect, authorize('admin'), userCtrl.addUserByExcelCtrl);
 
 export default { userRoutes, groupRoutes, statsRoutes };

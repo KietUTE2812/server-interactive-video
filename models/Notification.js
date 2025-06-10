@@ -7,25 +7,25 @@ const NotificationSchema = new Schema({
         type: Schema.Types.ObjectId,
         ref: 'User',
         required: function() {
-            return !this.userGroup && !this.email && !this.isSystem;
+            return !this.userGroup && !this.allUsers && !this.isSystem;
         }
     },
     userGroup: {
         type: String,
         required: function() {
-            return !this.user && !this.email && !this.isSystem;
+            return !this.user && !this.allUsers && !this.isSystem;
         }
     },
-    email: {
+    allUsers: {
         type: String,
         required: function() {
             return !this.user && !this.userGroup && !this.isSystem;
         },
         validate: {
             validator: function(v) {
-                return /^([\w-\.]+@([\w-]+\.)+[\w-]{2,4})?$/.test(v);
+                return v === 'true';
             },
-            message: props => `${props.value} is not a valid email address!`
+            message: props => `${props.value} is not a valid boolean!`
         }
     },
     title: {
@@ -95,7 +95,7 @@ const NotificationSchema = new Schema({
 NotificationSchema.index({ user: 1, read: 1, createdAt: -1 });
 
 // Index for email notifications
-NotificationSchema.index({ email: 1, emailSent: 1 });
+NotificationSchema.index({ allUsers: 1, emailSent: 1 });
 
 // Index for expiring notifications
 NotificationSchema.index({ expiresAt: 1 });

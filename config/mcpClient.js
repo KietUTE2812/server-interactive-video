@@ -60,7 +60,7 @@ class MCPClient {
           }
     }
     async processQuery(query, userId) {
-
+      console.log("query", query, userId);
         try {
           const history = await this.getChatHistory(userId);
           // Lưu lại câu hỏi của user
