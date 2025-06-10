@@ -152,6 +152,43 @@ function replaceJavaSolution(userCode, template) {
     }
 }
 
+function fixJavaCommonSyntaxIssues(userCode) {
+    let fixedCode = userCode;
+
+    // Sửa lỗi biến count không được khai báo
+    if (fixedCode.includes('count++') || fixedCode.includes('count--') || fixedCode.includes('count ')) {
+        if (!fixedCode.includes('int count') && !fixedCode.includes('count=')) {
+            // Tìm vị trí đầu method để thêm khai báo biến
+            const methodMatch = fixedCode.match(/public\s+\w+\s+\w+\s*\([^)]*\)\s*\{/);
+            if (methodMatch) {
+                const methodIndex = methodMatch.index + methodMatch[0].length;
+                fixedCode = fixedCode.slice(0, methodIndex) +
+                    '\n        int count = 0;' +
+                    fixedCode.slice(methodIndex);
+            }
+        }
+    }
+
+    // Sửa lỗi các biến phổ biến khác không được khai báo (sum, result, max, min, etc.)
+    const commonVars = ['sum', 'result', 'max', 'min', 'temp', 'index'];
+    commonVars.forEach(varName => {
+        if (fixedCode.includes(`${varName}++`) || fixedCode.includes(`${varName}--`) ||
+            fixedCode.includes(`${varName} =`) || fixedCode.includes(`${varName}+=`)) {
+            if (!fixedCode.includes(`int ${varName}`) && !fixedCode.includes(`${varName}=`)) {
+                const methodMatch = fixedCode.match(/public\s+\w+\s+\w+\s*\([^)]*\)\s*\{/);
+                if (methodMatch) {
+                    const methodIndex = methodMatch.index + methodMatch[0].length;
+                    fixedCode = fixedCode.slice(0, methodIndex) +
+                        `\n        int ${varName} = 0;` +
+                        fixedCode.slice(methodIndex);
+                }
+            }
+        }
+    });
+
+    return fixedCode;
+}
+
 function processJavaClassStructure(userCode, afterSolution) {
     // Kiểm tra xem afterSolution có Main class không
     const hasMainClass = afterSolution.includes('class Main');
@@ -164,15 +201,20 @@ function processJavaClassStructure(userCode, afterSolution) {
             // Remove last closing brace
             solutionContent = solutionContent.replace(/\}[\s]*$/, '').trim();
 
-            // Indent solution content
-            solutionContent = solutionContent.split('\n').map(line => '    ' + line).join('\n');
+            // Sửa các vấn đề syntax phổ biến
+            solutionContent = fixJavaCommonSyntaxIssues(solutionContent);
 
-            // Wrap as static inner class
-            return `static class Solution {\n${solutionContent}\n    }\n\n` + afterSolution;
+            // Indent solution content cho static inner class
+            solutionContent = solutionContent.split('\n').map(line => '        ' + line).join('\n');
+
+            // Wrap as static inner class với indentation đúng
+            return `    static class Solution {\n${solutionContent}\n    }\n\n` + afterSolution;
         } else {
             // User code chỉ có methods → wrap trong static inner class
-            const indentedCode = userCode.split('\n').map(line => '        ' + line).join('\n');
-            return `static class Solution {\n${indentedCode}\n    }\n\n` + afterSolution;
+            // Kiểm tra và sửa các vấn đề syntax phổ biến
+            let fixedUserCode = fixJavaCommonSyntaxIssues(userCode);
+            const indentedCode = fixedUserCode.split('\n').map(line => '        ' + line).join('\n');
+            return `    static class Solution {\n${indentedCode}\n    }\n\n` + afterSolution;
         }
     } else {
         // Template không có Main class → tạo structure thông thường
@@ -346,30 +388,57 @@ function replaceJava(code, params) {
 
             // Xử lý mảng
             if (param.type === 'array') {
+                // Kiểm tra xem variable declaration sử dụng type gì
+                const listPattern = new RegExp(`List<\\w+>\\s+${key}\\s*=`, 'g');
+                const arrayPattern = new RegExp(`int\\[\\]\\s+${key}\\s*=`, 'g');
+
+                let formattedArray;
+                let isListType = listPattern.test(code);
+                let isArrayType = arrayPattern.test(code);
+
+                if (isListType) {
+                    // Sử dụng Arrays.asList cho List type
+                    formattedArray = `Arrays.asList(${param.value.join(', ')})`;
+                } else {
+                    // Sử dụng array literal cho int[] type
+                    formattedArray = `new int[]{${param.value.join(', ')}}`;
+                }
+
+                console.log(`Detected type: ${isListType ? 'List' : 'Array'}, Formatted array: ${formattedArray}`);
+
                 // Tìm và replace các pattern khác nhau cho Java array/List
                 const arrayPatterns = [
-                    // Pattern 1: Arrays.asList(any values)
+                    // Pattern 1: List<Type> var = Arrays.asList(any values)
                     new RegExp(`(List<\\w+>\\s+${key}\\s*=\\s*)Arrays\\.asList\\([^)]*\\)`, 'g'),
-                    // Pattern 2: new ArrayList<>(Arrays.asList(any values))
+                    // Pattern 2: List<Type> var = new ArrayList<>(Arrays.asList(any values))
                     new RegExp(`(List<\\w+>\\s+${key}\\s*=\\s*)new\\s+ArrayList<>\\(Arrays\\.asList\\([^)]*\\)\\)`, 'g'),
-                    // Pattern 3: new int[]{any values}
+                    // Pattern 3: int[] var = new int[]{any values}
                     new RegExp(`(int\\[\\]\\s+${key}\\s*=\\s*)new\\s+int\\[\\]\\{[^}]*\\}`, 'g'),
-                    // Pattern 4: {values} format
+                    // Pattern 4: int[] var = {values} format
                     new RegExp(`(int\\[\\]\\s+${key}\\s*=\\s*)\\{[^}]*\\}`, 'g'),
-                    // Pattern 5: Variable without explicit type (for reassignment)
+                    // Pattern 5: Variable without explicit type (for reassignment to List)
                     new RegExp(`(\\s+${key}\\s*=\\s*)Arrays\\.asList\\([^)]*\\)`, 'g'),
+                    // Pattern 6: Variable without explicit type (for reassignment to array)
                     new RegExp(`(\\s+${key}\\s*=\\s*)new\\s+int\\[\\]\\{[^}]*\\}`, 'g')
                 ];
-
-                const formattedArray = `Arrays.asList(${param.value.join(', ')})`;
-                console.log(`Formatted array: ${formattedArray}`);
 
                 let replacementCount = 0;
                 arrayPatterns.forEach((pattern, index) => {
                     const originalCode = modifiedCode;
-                    modifiedCode = modifiedCode.replace(pattern, `$1${formattedArray}`);
+
+                    // Chọn format phù hợp dựa trên pattern
+                    let replacement;
+                    if (index <= 1 || index === 4) {
+                        // List patterns - use Arrays.asList
+                        replacement = `Arrays.asList(${param.value.join(', ')})`;
+                    } else {
+                        // Array patterns - use array literal
+                        replacement = `new int[]{${param.value.join(', ')}}`;
+                    }
+
+                    modifiedCode = modifiedCode.replace(pattern, `$1${replacement}`);
                     if (originalCode !== modifiedCode) {
-                        console.log(`✅ Pattern ${index + 1} matched and replaced`);
+                        console.log(`✅ Pattern ${index + 1} matched and replaced with ${replacement}`);
                         replacementCount++;
                     }
                 });
@@ -377,12 +446,25 @@ function replaceJava(code, params) {
                 // Fallback cho trường hợp đơn giản
                 if (replacementCount === 0) {
                     console.log("🔄 Trying fallback patterns...");
+
+                    // Fallback cho int[] type
                     const simpleArrayRegex = new RegExp(`int\\[\\]\\s*${key}\\s*=\\s*[^;]*;`, 'g');
                     const originalCode = modifiedCode;
                     modifiedCode = modifiedCode.replace(simpleArrayRegex, `int[] ${key} = new int[]{${param.value.join(', ')}};`);
                     if (originalCode !== modifiedCode) {
-                        console.log("✅ Fallback pattern matched");
+                        console.log("✅ Array fallback pattern matched");
                         replacementCount++;
+                    }
+
+                    // Fallback cho List type
+                    if (replacementCount === 0) {
+                        const simpleListRegex = new RegExp(`List<\\w+>\\s*${key}\\s*=\\s*[^;]*;`, 'g');
+                        const originalCode2 = modifiedCode;
+                        modifiedCode = modifiedCode.replace(simpleListRegex, `List<Integer> ${key} = Arrays.asList(${param.value.join(', ')});`);
+                        if (originalCode2 !== modifiedCode) {
+                            console.log("✅ List fallback pattern matched");
+                            replacementCount++;
+                        }
                     }
                 }
 

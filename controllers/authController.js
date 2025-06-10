@@ -27,10 +27,19 @@ export const checkAuth = asyncHandler(async (req, res, next) => {
 // @access  Private
 export const verifyPassword = asyncHandler(async (req, res, next) => {
     const { password } = req.body;
+    console.log('password', password);
 
     // Get user from middleware
-    const user = req.user;
+    const user = await User.findById(req.user._id).select('password');
+    if (!user) {
+        return next(new ErrorResponse('User not found in database', 404));
+    }
 
+    // 🔥 BƯỚC 3: Kiểm tra user có password không
+    if (!user.password) {
+        console.log('⚠️ User không có password - có thể là social login');
+        return next(new ErrorResponse('User does not have a password set. This might be a social login account.', 400));
+    }
     if (!password) {
         return next(new ErrorResponse('Please provide password', 400));
     }

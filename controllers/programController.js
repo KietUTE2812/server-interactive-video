@@ -45,6 +45,9 @@ function convertParametersToStdin(input, language) {
     try {
         if (!input || !input.includes('=')) return "";
 
+        console.log(`Converting parameters to stdin for language: ${language}`);
+        console.log(`Input parameters: ${input}`);
+
         const params = {};
         input.split(';').forEach(param => {
             const trimmedParam = param.trim();
@@ -72,12 +75,23 @@ function convertParametersToStdin(input, language) {
             }
         });
 
-        // Convert cho Java Scanner format
-        if (language.toLowerCase() === 'java') {
-            return convertToJavaStdin(params);
-        }
+        console.log("Parsed parameters:", params);
 
-        return "";
+        // Convert cho từng ngôn ngữ
+        switch (language.toLowerCase()) {
+            case 'java':
+                return convertToJavaStdin(params);
+            case 'cpp':
+            case 'c++':
+                return convertToCppStdin(params);
+            case 'c':
+                return convertToCStdin(params);
+            case 'python':
+                return convertToPythonStdin(params);
+            default:
+                console.log(`No specific stdin converter for language: ${language}`);
+                return "";
+        }
     } catch (error) {
         console.warn("Error converting parameters to stdin:", error.message);
         return "";
@@ -87,25 +101,163 @@ function convertParametersToStdin(input, language) {
 function convertToJavaStdin(params) {
     let stdinParts = [];
 
-    // Tìm array parameter (thường là arr, nums, array, etc.)
-    const arrayParam = Object.entries(params).find(([key, param]) => param.type === 'array');
+    console.log("Converting parameters to Java stdin format:", params);
 
-    if (arrayParam) {
-        const [arrayKey, arrayValue] = arrayParam;
-        // Thêm size của array
-        stdinParts.push(arrayValue.value.length.toString());
-        // Thêm các phần tử của array
-        stdinParts.push(...arrayValue.value);
-    }
+    // Sắp xếp parameters: array trước, primitive sau
+    const arrayParams = [];
+    const primitiveParams = [];
 
-    // Thêm các primitive parameters
     Object.entries(params).forEach(([key, param]) => {
-        if (param.type === 'primitive') {
-            stdinParts.push(param.value);
+        if (param.type === 'array') {
+            arrayParams.push([key, param]);
+        } else if (param.type === 'primitive') {
+            primitiveParams.push([key, param]);
         }
     });
 
-    return stdinParts.join('\n');
+    // Xử lý array parameters
+    arrayParams.forEach(([arrayKey, arrayValue]) => {
+        console.log(`Processing array parameter: ${arrayKey} with values:`, arrayValue.value);
+
+        // Thêm size của array
+        stdinParts.push(arrayValue.value.length.toString());
+
+        // Thêm từng phần tử của array trên từng dòng riêng biệt
+        arrayValue.value.forEach(value => {
+            stdinParts.push(value.toString().trim());
+        });
+    });
+
+    // Thêm các primitive parameters
+    primitiveParams.forEach(([key, param]) => {
+        console.log(`Processing primitive parameter: ${key} with value:`, param.value);
+        stdinParts.push(param.value.toString().trim());
+    });
+
+    const result = stdinParts.join('\n');
+    console.log("Generated stdin:", result);
+
+    return result;
+}
+
+function convertToCppStdin(params) {
+    let stdinParts = [];
+    console.log("Converting parameters to C++ stdin format:", params);
+
+    // Sắp xếp parameters: array trước, primitive sau
+    const arrayParams = [];
+    const primitiveParams = [];
+
+    Object.entries(params).forEach(([key, param]) => {
+        if (param.type === 'array') {
+            arrayParams.push([key, param]);
+        } else if (param.type === 'primitive') {
+            primitiveParams.push([key, param]);
+        }
+    });
+
+    // Xử lý array parameters
+    arrayParams.forEach(([arrayKey, arrayValue]) => {
+        console.log(`Processing array parameter: ${arrayKey} with values:`, arrayValue.value);
+
+        // Thêm size của array
+        stdinParts.push(arrayValue.value.length.toString());
+
+        // Thêm từng phần tử của array trên từng dòng riêng biệt
+        arrayValue.value.forEach(value => {
+            stdinParts.push(value.toString().trim());
+        });
+    });
+
+    // Thêm các primitive parameters
+    primitiveParams.forEach(([key, param]) => {
+        console.log(`Processing primitive parameter: ${key} with value:`, param.value);
+        stdinParts.push(param.value.toString().trim());
+    });
+
+    const result = stdinParts.join('\n');
+    console.log("Generated C++ stdin:", result);
+
+    return result;
+}
+
+function convertToCStdin(params) {
+    let stdinParts = [];
+    console.log("Converting parameters to C stdin format:", params);
+
+    // Sắp xếp parameters: array trước, primitive sau
+    const arrayParams = [];
+    const primitiveParams = [];
+
+    Object.entries(params).forEach(([key, param]) => {
+        if (param.type === 'array') {
+            arrayParams.push([key, param]);
+        } else if (param.type === 'primitive') {
+            primitiveParams.push([key, param]);
+        }
+    });
+
+    // Xử lý array parameters
+    arrayParams.forEach(([arrayKey, arrayValue]) => {
+        console.log(`Processing array parameter: ${arrayKey} with values:`, arrayValue.value);
+
+        // Thêm size của array
+        stdinParts.push(arrayValue.value.length.toString());
+
+        // Thêm từng phần tử của array trên từng dòng riêng biệt
+        arrayValue.value.forEach(value => {
+            stdinParts.push(value.toString().trim());
+        });
+    });
+
+    // Thêm các primitive parameters
+    primitiveParams.forEach(([key, param]) => {
+        console.log(`Processing primitive parameter: ${key} with value:`, param.value);
+        stdinParts.push(param.value.toString().trim());
+    });
+
+    const result = stdinParts.join('\n');
+    console.log("Generated C stdin:", result);
+
+    return result;
+}
+
+function convertToPythonStdin(params) {
+    let stdinParts = [];
+    console.log("Converting parameters to Python stdin format:", params);
+
+    // Sắp xếp parameters: array trước, primitive sau
+    const arrayParams = [];
+    const primitiveParams = [];
+
+    Object.entries(params).forEach(([key, param]) => {
+        if (param.type === 'array') {
+            arrayParams.push([key, param]);
+        } else if (param.type === 'primitive') {
+            primitiveParams.push([key, param]);
+        }
+    });
+
+    // Xử lý array parameters
+    arrayParams.forEach(([arrayKey, arrayValue]) => {
+        console.log(`Processing array parameter: ${arrayKey} with values:`, arrayValue.value);
+
+        // Python thường dùng input().split() để đọc mảng
+        // Format: size trên dòng đầu, sau đó tất cả elements trên một dòng
+        stdinParts.push(arrayValue.value.length.toString());
+        stdinParts.push(arrayValue.value.join(' '));
+    });
+
+    // Thêm các primitive parameters
+    primitiveParams.forEach(([key, param]) => {
+        console.log(`Processing primitive parameter: ${key} with value:`, param.value);
+        stdinParts.push(param.value.toString().trim());
+    });
+
+    const result = stdinParts.join('\n');
+    console.log("Generated Python stdin:", result);
+
+    return result;
 }
 
 // @desc    Get all programming problems
@@ -615,7 +767,7 @@ const checkValidCode = async (code, lang, input, codeExecute) => {
 
 export const generateChartCode = asyncHandler(async (req, res, next) => {
     const { code, language, codeExecute, input } = req.body;
-    console.log("Received request:", req.codeExecute);
+
     if (!code || !language || !input || !codeExecute) {
         return next(new ErrorResponse("Missing code or language", 400));
     }
