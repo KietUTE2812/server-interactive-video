@@ -16,7 +16,7 @@ router.route('/read-all')
 
 router.route('/detail/:id')
     .get(protect, notificationController.getNotification)
-    .delete(protect, notificationController.deleteNotification);
+    .delete(protect, authorize('admin'), notificationController.deleteNotification);
 
 router.route('/:id/read')
     .put(protect, notificationController.markNotificationAsRead);

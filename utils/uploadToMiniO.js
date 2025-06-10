@@ -62,7 +62,7 @@ class MiniO {
             'response-content-disposition': 'attachment',
             // Add policy conditions
             'ip-address': '127.0.0.1',
-            'host': 'localhost:5173'
+            'host': process.env.CLIENT_URL
         };
         return new Promise((resolve, reject) => {
             this.minioClient.presignedGetObject(this.bucketName, objectName, time, reqParams, (err, presignedUrl) => {
@@ -85,7 +85,7 @@ class MiniO {
                     Resource: `arn:aws:s3:::${bucketName}/*`,
                     Condition:{
                         "StringLike": {
-                            "aws:Referer":["http://localhost:5173/*"]
+                            "aws:Referer":[`${process.env.CLIENT_URL}/*`]
                         }
                     }
                 },
@@ -105,4 +105,5 @@ class MiniO {
 
 }
 const miniO = new MiniO();
+miniO.config(process.env.MINIO_BUCKET_NAME);
 export default miniO;

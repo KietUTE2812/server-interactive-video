@@ -31,6 +31,7 @@ export const protect = asyncHandler(async (req, res, next) => {
         const userId = typeof decoded._id === 'object' ? decoded._id.toString() : decoded._id;
 
         req.user = {
+            id: decoded._id,
             _id: decoded._id,
             role: decoded.role
         }

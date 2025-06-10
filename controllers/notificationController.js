@@ -103,7 +103,7 @@ const sendUserNotification = asyncHandler(async (req, res, next) => {
     
     // Determine delivery method based on isEmail flag
     const deliveryMethod = isEmail ? ['in-app', 'email'] : ['in-app'];
-    
+    console.log("Sending notification to user", userId);
     // Send notification through Kafka
     await notificationService.sendUserNotification(userId, {
         title,
@@ -276,10 +276,14 @@ const deleteNotification = asyncHandler(async (req, res, next) => {
         return next(new ErrorResponse(`Notification not found with id of ${req.params.id}`, 404));
     }
 
-    // Check if user owns this notification
-    if (notification.user && notification.user.toString() !== req.user._id.toString()) {
+    if (req.user.role !== 'admin') {
         return next(new ErrorResponse(`Not authorized to delete this notification`, 401));
     }
+
+    // // Check if user owns this notification
+    // if (notification.user && notification.user.toString() !== req.user._id.toString()) {
+    //     return next(new ErrorResponse(`Not authorized to delete this notification`, 401));
+    // }
 
     await notification.deleteOne();
 
