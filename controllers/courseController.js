@@ -782,4 +782,124 @@ export const getCourseStats = asyncHandler(async (req, res, next) => {
   });
 });
 
+export const getCertificate = asyncHandler(async (req, res, next) => {
+  const courseId = req.params.id;
+  const userId = req.user.id;
+
+  const user = await User.findById(userId);
+  if (!user) {
+    return next(new ErrorResponse('User not found', 404));
+  }
+
+  const certificate = user.certificate.find((cert) => cert.course.toString() === courseId);
+  if (!certificate) {
+    return res.status(200).json({
+      success: true,
+      message: 'No certificate found for this course',
+      data: null
+    });
+  }
+  res.status(200).json({
+    success: true,
+    message: 'Certificate retrieved successfully',
+    data: certificate
+  });
+})
+
+/**
+ * @desc      Tạo chứng chỉ cho học viên hoàn thành khóa học
+ * @route     POST /api/v1/learns/certificate/:id
+ * @access    Private (Student)
+ */
+export const createCertificate = asyncHandler(async (req, res, next) => {
+  const courseId = req.params.id;
+  const userId = req.user._id;
+
+  try {
+    // Kiểm tra khóa học
+    const course = await Course.findById(courseId);
+    if (!course) {
+      return next(new ErrorResponse('Course not found', 404));
+    }
+
+    // Kiểm tra người dùng
+    const user = await User.findById(userId);
+    if (!user) {
+      return next(new ErrorResponse('User not found', 404));
+    }
+
+    // Kiểm tra user đã đăng ký khóa học chưa
+    const isEnrolled = user.enrolled_courses.includes(courseId);
+    if (!isEnrolled) {
+      return next(new ErrorResponse('You are not enrolled in this course', 403));
+    }
+
+    // Kiểm tra file certificate
+    if (!req?.file) {
+      return next(new ErrorResponse('Certificate file is required', 400));
+    }
+
+    const certificateFile = req.file;
+    console.log("Certificate file received:", certificateFile);
+
+    // Upload file lên MinIO
+    const certificateName = Date.now() + '_' + certificateFile.originalname;
+    let fullCertificateUrl;
+
+    try {
+      const uploadResult = await minio.uploadStream(
+        certificateName,
+        certificateFile.buffer,
+        certificateFile.size
+      );
+      fullCertificateUrl = `${process.env.MINIO_URL}/${uploadResult.objectName}`;
+    } catch (error) {
+      console.error("Error uploading certificate:", error);
+      return next(new ErrorResponse(`File upload failed: ${error.message}`, 500));
+    }
+
+    // Kiểm tra xem certificate đã tồn tại chưa
+    let existingCertificate = user.certificate.find(
+      (cert) => cert.course.toString() === courseId
+    );
+
+    if (existingCertificate) {
+      existingCertificate.certificateImg = fullCertificateUrl;
+      existingCertificate.createdAt = new Date();
+    } else {
+      const newCertificate = {
+        course: courseId,
+        certificateImg: fullCertificateUrl,
+        createdAt: new Date()
+      };
+      user.certificate.push(newCertificate);
+      existingCertificate = newCertificate; // gán lại để response trả về đúng object mới
+    }
+
+    // Đánh dấu mảng certificate đã bị thay đổi để Mongoose cập nhật
+    user.markModified('certificate');
+    await user.save();
+
+    console.log("Certificate saved successfully:", user.certificate);
+
+    res.status(201).json({
+      success: true,
+      message: existingCertificate ? 'Certificate updated successfully' : 'Certificate created successfully',
+      data: {
+        certificate: existingCertificate,
+        certificateImg: existingCertificate.certificateImg,
+        course: {
+          _id: course._id,
+          title: course.title,
+          instructor: course.instructor
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error creating certificate:', error);
+    return next(new ErrorResponse('Failed to create certificate', 500));
+  }
+});
+
+
 

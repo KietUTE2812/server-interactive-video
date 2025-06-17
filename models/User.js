@@ -138,7 +138,7 @@ const UserSchema = new Schema({
             type: Schema.Types.ObjectId,
             ref: 'Course'
         },
-        certificate: {
+        certificateImg: {
             type: String
         },
         createdAt: {

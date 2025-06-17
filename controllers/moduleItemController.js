@@ -956,7 +956,7 @@ function generatePrompt(currQuestion, selectedAnswer, historyAns) {
   // Get the list of incorrect answers, formatted as bullet points
   const incorrectAnswers = answers
     .filter((ans) => !ans.isCorrect)
-      .map((ans) => "- ${ans.content}")
+    .map((ans) => "- ${ans.content}")
     .join("\n");
 
   // Get the answer that the user selected
@@ -970,32 +970,72 @@ function generatePrompt(currQuestion, selectedAnswer, historyAns) {
   const correctnessMsg = isSelectedCorrect ? "*correct*" : "*incorrect*";
 
   // Construct the prompt with clear sections and instructions
+  //   return `
+
+  //   As a programming instructor, create a new multiple-choice question in the "${questionType}" format.
+
+  // The new question should be similar in content to the following:
+  // "${question}"
+
+  // Additional information:
+  // - Correct answer in the original question: "${correctAnswer}"
+  // - Incorrect answers in the original question:
+  // ${incorrectAnswers}
+
+  // The user selected: "${selectedAnswerText}", but this answer is ${correctnessMsg}.
+
+  // The history answer for this question is:
+  // ${JSON.stringify(historyAns, null, 2)}
+
+  // Please generate a new question that tests knowledge on the same topic but uses a different context or rephrased wording.
+  // The new question should maintain these characteristics:
+  // ${JSON.stringify(currQuestion, null, 2)}
+
+  // Ensure the new question:
+  // 1. Tests the same programming concept in a different way
+  // 2. Is not too similar to any questions in the history
+  // 3. Maintains the appropriate difficulty level
+  // 4. Includes clear explanations for both correct and incorrect answers
+  // 5. The number of answers in the data matches the number of answers generated
+  // 6. Does not contain special characters that the interface does not understand
+  // 7. The question is not too similar to the original question
+  // 8. The question is not too similar to the history questions`;
   return `
+Role: You are an expert assessment generator for a programming learning platform.
 
-  As a programming instructor, create a new multiple-choice question in the "${questionType}" format.
+Task: Create a new multiple-choice question that is topically similar to the source question provided, but uses a different context or example. The new question MUST strictly adhere to the provided JSON output format.
 
-The new question should be similar in content to the following:
-"${question}"
+Context & Source Data:
 
-Additional information:
-- Correct answer in the original question: "${correctAnswer}"
-- Incorrect answers in the original question:
+Question Type: ${questionType}
+
+Source Question: ${question}
+
+Source Correct Answer: ${correctAnswer}
+
+Source Incorrect Answers:
+
 ${incorrectAnswers}
 
-The user selected: "${selectedAnswerText}", but this answer is ${correctnessMsg}.
+User's Recent Attempt: The user selected "${selectedAnswerText}", which was ${correctnessMsg}.
 
-The history answer for this question is:
+Question History (avoid generating questions too similar to these):
+
 ${JSON.stringify(historyAns, null, 2)}
 
-Please generate a new question that tests knowledge on the same topic but uses a different context or rephrased wording.
-The new question should maintain these characteristics:
-${JSON.stringify(currQuestion, null, 2)}
+Instructions & Constraints:
 
-Ensure the new question:
-1. Tests the same programming concept in a different way
-2. Is not too similar to any questions in the history
-3. Maintains the appropriate difficulty level
-4. Includes clear explanations for both correct and incorrect answers`;
+Core Concept: The new question must test the same fundamental programming concept as the source question.
+
+Difficulty: The difficulty level must remain consistent with the source question.
+
+Uniqueness: The new question's content (text, code examples, options) must be original and distinct from the source question and all questions in the history.
+
+Explanations: Provide a clear, concise explanation for why the correct answer is right and why each incorrect answer is wrong.
+
+Required Output Format:
+Your entire response must be a single, valid JSON object matching this exact structure. Do not include any text outside of the JSON object.
+`
 }
 
 // function generatePrompt(currQuestion, selectedAnswer, historyAns) {
@@ -1192,7 +1232,7 @@ export async function createNewInteractiveQuestion(
     .filter((ans) => ans.userId.toString() === userId.toString())
     .map((ans) => ({
       question: ans.question,
-      selectedAnswer: ans.selectedAnswer, // Sửa từ 'answer' thành 'selectedAnswer'
+      selectedAnswer: ans.selectedAnswer,
       isCorrect: ans.isCorrect,
     }));
 
@@ -1344,41 +1384,40 @@ export const updateInteractiveQuestion = asyncHandler(
         );
 
         console.log(
-          `User ${userId} answered incorrectly. Checking for existing not-started questions...`   
+          `User ${userId} answered incorrectly. Checking for existing not-started questions...`
         );
 
         // Kiểm tra trong lịch sử có câu hỏi nào ở trạng thái not-started không
-        const existingQuestion = await findExistingNotStartedQuestion(
+        // const existingQuestion = await findExistingNotStartedQuestion(
+        //   videoId,
+        //   userId,
+        //   currentQuestion.questionId || currentQuestion._id
+        // );
+
+        // if (existingQuestion) {
+        //   // Có câu hỏi not-started trong lịch sử -> sử dụng lại
+        //   console.log(
+        //     "Found existing not-started question:",
+        //     existingQuestion
+        //   );
+        //   nextQuestion = existingQuestion;
+        // } else {
+        //   // Không có câu hỏi not-started -> tạo câu hỏi mới
+        //   console.log(
+        //     "No existing not-started question found, creating new one"
+        //   );
+        nextQuestion = await createNewInteractiveQuestion(
+          currentQuestion,
           videoId,
           userId,
-          currentQuestion.questionId || currentQuestion._id
+          selectedAnswer
         );
-
-        if (existingQuestion) {
-          // Có câu hỏi not-started trong lịch sử -> sử dụng lại
-          console.log(
-            "Found existing not-started question:",
-            existingQuestion
-          );
-          nextQuestion = existingQuestion;
-        } else {
-          // Không có câu hỏi not-started -> tạo câu hỏi mới
-          console.log(
-            "No existing not-started question found, creating new one"
-          );
-          nextQuestion = await createNewInteractiveQuestion(
-            currentQuestion,
-            videoId,
-            userId,
-            selectedAnswer
-          );
-        }
-
+        // }
+        console.log("nextQuestion", nextQuestion);
         return res.status(200).json({
           success: true,
-          message: existingQuestion
-            ? "Question answered incorrectly, existing question retrieved"
-            : "Question answered incorrectly, new question generated",
+          message:
+            "New question generated",
           data: {
             isCorrect: false,
             nextQuestion: nextQuestion,

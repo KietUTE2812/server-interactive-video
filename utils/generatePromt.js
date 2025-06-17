@@ -8,19 +8,19 @@ import { ObjectId } from 'mongodb';
  * @returns {Object} - A properly formatted question object
  */
 function processAIResponse(aiResponse, currQuestionId = null) {
-   
-    
+
+
     try {
         // First try to extract and parse JSON
         const jsonResult = tryExtractAndParseJSON(aiResponse);
         if (jsonResult.success) {
             return formatQuestionData(jsonResult.data, currQuestionId);
         }
-        
+
         // If JSON parsing fails, fall back to text extraction
         console.warn("JSON parsing failed, falling back to text extraction");
         return createQuestionFromText(aiResponse, currQuestionId);
-        
+
     } catch (error) {
         console.error("Error processing AI response:", error);
         return createErrorResponse(error, aiResponse);
@@ -40,20 +40,20 @@ function tryExtractAndParseJSON(aiResponse) {
         if (!jsonString) {
             return { success: false, error: "No JSON found" };
         }
-        
+
         // Clean and preprocess JSON
         jsonString = preprocessJSON(jsonString);
-        
+
         // Parse JSON
         const parsedData = JSON.parse(jsonString);
-        
+
         // Validate basic structure
         if (!isValidQuestionStructure(parsedData)) {
             return { success: false, error: "Invalid question structure" };
         }
-        
+
         return { success: true, data: parsedData };
-        
+
     } catch (error) {
         console.error("JSON extraction/parsing failed:", error.message);
         return { success: false, error: error.message };
@@ -69,11 +69,11 @@ function tryExtractAndParseJSON(aiResponse) {
 function extractJSONString(aiResponse) {
     // Remove "Processing AI response..." and "AI Response:" prefixes
     let cleaned = aiResponse.replace(/^.*?AI Response:\s*/s, '');
-    
+
     // Pattern 1: Standard markdown JSON code block
     let match = cleaned.match(/```json\s*([\s\S]*?)\s*```/i);
     if (match) return match[1];
-    
+
     // Pattern 2: Generic code block
     match = cleaned.match(/```\s*([\s\S]*?)\s*```/);
     if (match) {
@@ -83,15 +83,15 @@ function extractJSONString(aiResponse) {
             return content;
         }
     }
-    
+
     // Pattern 3: Find JSON object without code block
     const jsonStart = cleaned.indexOf('{');
     const jsonEnd = cleaned.lastIndexOf('}');
-    
+
     if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
         return cleaned.substring(jsonStart, jsonEnd + 1);
     }
-    
+
     return null;
 }
 
@@ -104,19 +104,19 @@ function extractJSONString(aiResponse) {
 function preprocessJSON(jsonString) {
     // Remove single-line comments
     jsonString = jsonString.replace(/\/\/.*$/gm, '');
-    
+
     // Remove multi-line comments
     jsonString = jsonString.replace(/\/\*[\s\S]*?\*\//g, '');
-    
+
     // Fix trailing commas
     jsonString = jsonString.replace(/,(\s*[}\]])/g, '$1');
-    
+
     // Fix unquoted property names (simple cases)
     jsonString = jsonString.replace(/([{,]\s*)([a-zA-Z_$][a-zA-Z0-9_$]*)(\s*:)/g, '$1"$2"$3');
-    
+
     // Clean up whitespace
     jsonString = jsonString.replace(/\s+/g, ' ').trim();
-    
+
     return jsonString;
 }
 
@@ -145,17 +145,17 @@ function isValidQuestionStructure(data) {
  */
 function formatQuestionData(questionData, currQuestionId) {
     // Generate or use provided ObjectId
-    const questionId = currQuestionId ? 
-        (ObjectId.isValid(currQuestionId) ? new ObjectId(currQuestionId) : new ObjectId()) : 
+    const questionId = currQuestionId ?
+        (ObjectId.isValid(currQuestionId) ? new ObjectId(currQuestionId) : new ObjectId()) :
         new ObjectId();
-    
+
     // Process answers with ObjectIds
     const processedAnswers = questionData.answers.map(answer => ({
         content: answer.content || '',
         isCorrect: Boolean(answer.isCorrect),
         _id: new ObjectId()
     }));
-    
+
     // Validate at least one correct answer for single-choice
     const questionType = questionData.questionType || 'single-choice';
     if (questionType === 'single-choice') {
@@ -175,7 +175,7 @@ function formatQuestionData(questionData, currQuestionId) {
             });
         }
     }
-    
+
     // Build formatted question object
     const formattedQuestion = {
         _id: questionId,
@@ -187,7 +187,7 @@ function formatQuestionData(questionData, currQuestionId) {
         explanation: formatExplanation(questionData.explanation),
         ...(questionData.index && { index: questionData.index })
     };
-    
+
     return formattedQuestion;
 }
 
@@ -201,18 +201,18 @@ function formatExplanation(explanation) {
     if (!explanation) {
         return { correct: '', incorrect: {} };
     }
-    
+
     if (typeof explanation === 'string') {
         return { correct: explanation, incorrect: {} };
     }
-    
+
     if (typeof explanation === 'object') {
         return {
             correct: explanation.correct || '',
             incorrect: explanation.incorrect || {}
         };
     }
-    
+
     return { correct: '', incorrect: {} };
 }
 
@@ -224,10 +224,10 @@ function formatExplanation(explanation) {
  * @returns {Object} - Question object created from text
  */
 function createQuestionFromText(aiResponse, currQuestionId) {
-    const questionId = currQuestionId ? 
-        (ObjectId.isValid(currQuestionId) ? new ObjectId(currQuestionId) : new ObjectId()) : 
+    const questionId = currQuestionId ?
+        (ObjectId.isValid(currQuestionId) ? new ObjectId(currQuestionId) : new ObjectId()) :
         new ObjectId();
-    
+
     return {
         _id: questionId,
         questionType: extractQuestionType(aiResponse),
@@ -235,7 +235,7 @@ function createQuestionFromText(aiResponse, currQuestionId) {
         startTime: Date.now(),
         answers: extractAnswersFromText(aiResponse),
         history: [],
-        explanation: { 
+        explanation: {
             correct: extractGeneralExplanation(aiResponse),
             incorrect: {}
         },
@@ -256,13 +256,13 @@ function extractQuestionType(aiResponse) {
         { pattern: /true[- ]?false/i, type: 'true-false' },
         { pattern: /fill[- ]?blank/i, type: 'fill-blank' }
     ];
-    
+
     for (const { pattern, type } of typePatterns) {
         if (pattern.test(aiResponse)) {
             return type;
         }
     }
-    
+
     return 'single-choice'; // default
 }
 
@@ -276,21 +276,21 @@ function extractQuestionText(aiResponse) {
     // Pattern 1: Look for quoted question after "question" key
     let match = aiResponse.match(/["""]question["""]:\s*["""]([^"""]*)["""]/i);
     if (match) return match[1].trim();
-    
+
     // Pattern 2: Look for lines ending with question mark
     const lines = aiResponse.split('\n');
     for (const line of lines) {
         const trimmed = line.trim();
-        if (trimmed.endsWith('?') && trimmed.length > 10 && 
+        if (trimmed.endsWith('?') && trimmed.length > 10 &&
             !trimmed.includes('{') && !trimmed.includes('}')) {
             return trimmed;
         }
     }
-    
+
     // Pattern 3: Look after "question:" (case insensitive)
     match = aiResponse.match(/question:\s*([^{}\n]*\?)/i);
     if (match) return match[1].trim();
-    
+
     return "Unable to extract question text - manual review required";
 }
 
@@ -302,46 +302,85 @@ function extractQuestionText(aiResponse) {
  */
 function extractAnswersFromText(aiResponse) {
     const answers = [];
-    
+
     // Try to extract from JSON-like structure first
-    const answersMatch = aiResponse.match(/"answers":\s*\[([\s\S]*?)\]/);
-    if (answersMatch) {
-        const answersText = answersMatch[1];
-        const answerBlocks = answersText.split('},{');
-        
-        answerBlocks.forEach((block, index) => {
-            const contentMatch = block.match(/"content":\s*"([^"]*)"/);
-            const correctMatch = block.match(/"isCorrect":\s*(true|false)/);
-            
-            if (contentMatch) {
-                answers.push({
-                    _id: new ObjectId(),
-                    content: contentMatch[1],
-                    isCorrect: correctMatch ? correctMatch[1] === 'true' : index === 0
-                });
-            }
+    const optionsMatch = aiResponse.match(/"options":\s*\[([\s\S]*?)\]/);
+    const correctOptionMatch = aiResponse.match(/"correct_option":\s*"([^"]*)"/);
+
+    if (optionsMatch) {
+        const optionsText = optionsMatch[1];
+        // Xử lý mảng options
+        const options = optionsText
+            .split(',')
+            .map(opt => opt.trim().replace(/^"|"$/g, '')); // Loại bỏ dấu ngoặc kép
+
+        // Lấy correct_option
+        const correctOption = correctOptionMatch ?
+            correctOptionMatch[1].trim() :
+            options[0]; // Mặc định lấy option đầu tiên nếu không có correct_option
+
+        // Tạo mảng answers
+        options.forEach(option => {
+            answers.push({
+                _id: new ObjectId(),
+                content: option,
+                isCorrect: option === correctOption
+            });
         });
     }
-    
-    // If no answers found, create default ones
+
+    // If no answers found, try to extract from explanations
     if (answers.length === 0) {
-        // Look for bullet points or numbered lists
+        const explanationsMatch = aiResponse.match(/"explanations":\s*{([\s\S]*?)}/);
+        if (explanationsMatch) {
+            const explanationsText = explanationsMatch[1];
+            const optionsMatch = explanationsText.match(/"options":\s*\[([\s\S]*?)\]/);
+
+            if (optionsMatch) {
+                const optionsText = optionsMatch[1];
+                const options = optionsText
+                    .split('},{')
+                    .map(opt => {
+                        const contentMatch = opt.match(/"content":\s*"([^"]*)"/);
+                        return contentMatch ? contentMatch[1] : null;
+                    })
+                    .filter(Boolean);
+
+                // Lấy correct_option từ explanations
+                const correctOptionMatch = explanationsText.match(/"correct_option":\s*"([^"]*)"/);
+                const correctOption = correctOptionMatch ?
+                    correctOptionMatch[1].trim() :
+                    options[0];
+
+                options.forEach(option => {
+                    answers.push({
+                        _id: new ObjectId(),
+                        content: option,
+                        isCorrect: option === correctOption
+                    });
+                });
+            }
+        }
+    }
+
+    // If still no answers found, look for bullet points or numbered lists
+    if (answers.length === 0) {
         const lines = aiResponse.split('\n');
         const answerLines = lines.filter(line => {
             const trimmed = line.trim();
-            return (trimmed.match(/^[A-D]\)/) || 
-                   trimmed.match(/^[1-4]\./) || 
-                   trimmed.match(/^[\-\*]/)) && 
-                   trimmed.length > 3;
+            return (trimmed.match(/^[A-D]\)/) ||
+                trimmed.match(/^[1-4]\./) ||
+                trimmed.match(/^[\-\*]/)) &&
+                trimmed.length > 3;
         });
-        
+
         if (answerLines.length > 0) {
             answerLines.forEach((line, index) => {
                 const content = line.replace(/^[A-D\)\-\*1-4\.\s]+/, '').trim();
                 answers.push({
                     _id: new ObjectId(),
                     content: content,
-                    isCorrect: index === 0 // Default first as correct
+                    isCorrect: index === 0
                 });
             });
         } else {
@@ -352,7 +391,7 @@ function extractAnswersFromText(aiResponse) {
                 "Option C (Please review)",
                 "Option D (Please review)"
             ];
-            
+
             defaultAnswers.forEach((content, index) => {
                 answers.push({
                     _id: new ObjectId(),
@@ -362,7 +401,7 @@ function extractAnswersFromText(aiResponse) {
             });
         }
     }
-    
+
     return answers;
 }
 
@@ -378,14 +417,14 @@ function extractGeneralExplanation(aiResponse) {
         /because\s+([^{}\n.]*)/i,
         /reason[^:]*:\s*([^{}\n]*)/i
     ];
-    
+
     for (const pattern of patterns) {
         const match = aiResponse.match(pattern);
         if (match && match[1].trim().length > 10) {
             return match[1].trim();
         }
     }
-    
+
     return "No explanation available";
 }
 
@@ -409,9 +448,9 @@ function createErrorResponse(error, aiResponse) {
             { _id: new ObjectId(), content: 'Manual intervention needed', isCorrect: false }
         ],
         history: [],
-        explanation: { 
-            correct: 'Processing error occurred', 
-            incorrect: {} 
+        explanation: {
+            correct: 'Processing error occurred',
+            incorrect: {}
         },
         originalResponse: aiResponse.substring(0, 1000), // Truncate for storage
         processingError: {
@@ -442,9 +481,9 @@ function isValidObjectId(id) {
 
 // Export the main function and utilities
 export default processAIResponse;
-export { 
-    generateObjectId, 
-    isValidObjectId, 
-    extractJSONString, 
-    preprocessJSON 
+export {
+    generateObjectId,
+    isValidObjectId,
+    extractJSONString,
+    preprocessJSON
 };

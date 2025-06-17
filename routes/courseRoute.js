@@ -10,7 +10,9 @@ import {
     getCourseByInstructor,
     getAllCoursebyUser,
     deleteCourse,
-    getCourseStats
+    getCourseStats,
+    getCertificate,
+    createCertificate
 } from "../controllers/courseController.js";
 
 import {
@@ -52,27 +54,27 @@ const authorizeCourseAccess = async (req, res, next) => {
     try {
         const courseId = req.params.id;
         const userId = req.user._id.toString();
-        
+
         // Admin luôn có quyền truy cập
         if (req.user.role === 'admin') {
             return next();
         }
-        
+
         // Tìm khóa học để kiểm tra instructor
         const course = await Course.findById(courseId);
-        
+
         if (!course) {
             return res.status(404).json({
                 status: "error",
                 message: "Course not found"
             });
         }
-        
+
         // Kiểm tra xem người dùng có phải là instructor của khóa học không
         if (req.user.role === 'instructor' && course.instructor.toString() === userId) {
             return next();
         }
-        
+
         return res.status(403).json({
             status: "error",
             message: "You are not authorized to access this course"
@@ -90,18 +92,18 @@ const authorizeCourseAccess = async (req, res, next) => {
 // Lấy danh sách khóa học (ngườhập sẽ thi dùng đã đăng nấy các khóa học phù hợp với role)
 router.route('/')
     .get(protect, getCourses);
-    
+
 router.route('/courseId/:id')
     .get(getCourseByCourseId);
 
 router.route('/recommend')
-.get(protect, recommendContentBased);
+    .get(protect, recommendContentBased);
 router.route('/recommend/collaborative')
-.get(protect, recommendCollaborative);
+    .get(protect, recommendCollaborative);
 router.route('/recommend/hybrid')
-.get(protect, recommendHybrid);
+    .get(protect, recommendHybrid);
 router.route('/recommend/popular')
-.get(protect, recommendPopular);
+    .get(protect, recommendPopular);
 
 // ===== STUDENT ROUTES =====
 // Đăng ký khóa học - chỉ dành cho học viên
@@ -226,5 +228,8 @@ router.route('/moduleitem/getModule/:itemId')
 router.route('/moduleitem/:moduleItemId')
     .get(protect, getModuleItemById); // Tất cả role đã đăng nhập
 
+router.route('/certificate/:id')
+    .get(protect, authorize('student'), getCertificate)
+    .post(protect, authorize('student'), upload.single('certificate'), createCertificate);
 
 export default router;
