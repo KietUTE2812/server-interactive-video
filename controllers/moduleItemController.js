@@ -1003,9 +1003,25 @@ function generatePrompt(currQuestion, selectedAnswer, historyAns) {
   return `
 Role: You are an expert assessment generator for a programming learning platform.
 
-Task: Create a new multiple-choice question that is topically similar to the source question provided, but uses a different context or example. The new question MUST strictly adhere to the provided JSON output format.
+Task: Create a new ${questionType} question that is topically similar to the source question provided, but uses a different context or example. The new question MUST strictly adhere to the provided JSON output format.
 
 Context & Source Data:
+
+The new question should be similar in content to the following:
+"${question}"
+The answer should be in the following format:
+${JSON.stringify(answers, null, 2)}
+
+Additional information:
+- Correct answer in the original question: "${correctAnswer}"
+- Incorrect answers in the original question:
+${incorrectAnswers}
+
+The user selected: "${selectedAnswerText}", but this answer is ${correctnessMsg}.
+
+The history answer for this question is:
+${JSON.stringify(historyAns, null, 2)}
+
 
 Question Type: ${questionType}
 

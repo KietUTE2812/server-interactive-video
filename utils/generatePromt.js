@@ -131,8 +131,10 @@ function isValidQuestionStructure(data) {
         data &&
         typeof data === 'object' &&
         data.question &&
-        Array.isArray(data.answers) &&
-        data.answers.length > 0
+        (
+            (Array.isArray(data.options) && data.options.length > 0) ||
+            (Array.isArray(data.answers) && data.answers.length > 0)
+        )
     );
 }
 
@@ -149,8 +151,8 @@ function formatQuestionData(questionData, currQuestionId) {
         (ObjectId.isValid(currQuestionId) ? new ObjectId(currQuestionId) : new ObjectId()) :
         new ObjectId();
 
-    // Process answers with ObjectIds
-    const processedAnswers = questionData.answers.map(answer => ({
+    // Process answers/options with ObjectIds
+    const processedAnswers = (questionData.options || questionData.answers || []).map(answer => ({
         content: answer.content || '',
         isCorrect: Boolean(answer.isCorrect),
         _id: new ObjectId()
@@ -209,7 +211,12 @@ function formatExplanation(explanation) {
     if (typeof explanation === 'object') {
         return {
             correct: explanation.correct || '',
-            incorrect: explanation.incorrect || {}
+            incorrect: Array.isArray(explanation.incorrect)
+                ? explanation.incorrect.reduce((acc, curr, index) => {
+                    acc[index] = curr;
+                    return acc;
+                }, {})
+                : explanation.incorrect || {}
         };
     }
 
@@ -312,14 +319,15 @@ function extractAnswersFromText(aiResponse) {
         // Xử lý mảng options
         const options = optionsText
             .split(',')
-            .map(opt => opt.trim().replace(/^"|"$/g, '')); // Loại bỏ dấu ngoặc kép
+            .map(opt => opt.trim().replace(/^"|"$/g, '')) // Loại bỏ dấu ngoặc kép
+            .filter(opt => opt && !opt.includes('{') && !opt.includes('}')); // Lọc các option hợp lệ
 
         // Lấy correct_option
         const correctOption = correctOptionMatch ?
             correctOptionMatch[1].trim() :
             options[0]; // Mặc định lấy option đầu tiên nếu không có correct_option
 
-        // Tạo mảng answers
+        // Tạo mảng answers với cấu trúc chuẩn
         options.forEach(option => {
             answers.push({
                 _id: new ObjectId(),
@@ -384,7 +392,7 @@ function extractAnswersFromText(aiResponse) {
                 });
             });
         } else {
-            // Create fallback answers
+            // Create fallback answers with proper structure
             const defaultAnswers = [
                 "Option A (Please review)",
                 "Option B (Please review)",
@@ -402,7 +410,12 @@ function extractAnswersFromText(aiResponse) {
         }
     }
 
-    return answers;
+    // Đảm bảo mỗi answer có đúng cấu trúc
+    return answers.map(answer => ({
+        _id: answer._id || new ObjectId(),
+        content: answer.content || '',
+        isCorrect: Boolean(answer.isCorrect)
+    }));
 }
 
 /**

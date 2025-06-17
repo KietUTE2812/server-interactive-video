@@ -376,6 +376,7 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
     // Chuẩn bị dữ liệu cập nhật
     const courseData = { ...req.body };
     delete courseData.modules; // Xử lý riêng modules
+    delete courseData.approvedBy; // Xử lý riêng approvedBy
 
     // Upload video nếu có
     if (req.files) {
@@ -400,6 +401,7 @@ export const updateCourse = asyncHandler(async (req, res, next) => {
         }
       }
     }
+    console.log("courseData", courseData)
 
     // Cập nhật khóa học
     const updatedCourse = await Course.findByIdAndUpdate(
